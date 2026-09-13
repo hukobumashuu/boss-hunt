@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: boss-tracker-api
+    runtime: node # Render's documented setting for Bun apps as of 2026
+    rootDir: server
+    buildCommand: bun install
+    startCommand: bun src/server.ts
+    healthCheckPath: /health
+    plan: free
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false # set manually in the Render dashboard - never commit this
+      - key: ALLOWED_ORIGIN
+        sync: false # the deployed frontend's URL, e.g. https://boss-tracker.vercel.app

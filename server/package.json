@@ -1,0 +1,47 @@
+{
+  "name": "server",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "bun": ">=1.4.0"
+  },
+  "scripts": {
+    "dev": "bun --watch src/server.ts",
+    "start": "bun src/server.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "bun test",
+    "db:up": "docker compose -f ../docker-compose.yaml up -d",
+    "db:down": "docker compose -f ../docker-compose.yaml down",
+    "db:logs": "docker compose -f ../docker-compose.yaml logs -f postgres",
+    "db:generate": "bun --bun drizzle-kit generate",
+    "db:migrate": "bun --bun drizzle-kit migrate",
+    "db:seed": "bun src/db/seed.ts",
+    "db:generate-tokens": "bun src/db/generate-tokens.ts",
+    "db:rotate-token": "bun src/db/rotate-token.ts",
+    "db:studio": "bun --bun drizzle-kit studio"
+  },
+  "dependencies": {
+    "cors": "2.8.6",
+    "drizzle-orm": "0.45.2",
+    "express": "5.2.1",
+    "express-rate-limit": "8.7.0",
+    "postgres": "3.4.9",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/bun": "1.4.1",
+    "@types/cors": "2.8.19",
+    "@types/express": "5.0.6",
+    "drizzle-kit": "0.31.10",
+    "eslint": "10.10.0",
+    "eslint-config-prettier": "10.1.8",
+    "prettier": "3.9.6",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.70.0"
+  }
+}

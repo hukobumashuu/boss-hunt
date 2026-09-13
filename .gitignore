@@ -1,0 +1,21 @@
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# editors
+.vscode/
+.idea/
+*.swp
+
+# stray env
+.env
+.env.local
+
+node_modules/
+dist/
+*.log
+
+# decision logs
+decisions/
+COMMENTS.md

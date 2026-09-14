@@ -2,9 +2,10 @@ import { describe, it, expect } from 'bun:test';
 import { computeWindowState, compareByUrgency } from './tracker.derivation';
 
 const HOUR = 60 * 60 * 1000;
+const MIN = 60 * 1000;
 
 describe('computeWindowState', () => {
-  it('is locked before the first window', () => {
+  it('is locked well before the first window', () => {
     const killedAt = new Date('2026-01-01T00:00:00Z');
     const now = new Date('2026-01-01T02:00:00Z'); // 2h in, interval is 4h
     const state = computeWindowState(killedAt, 4, now);
@@ -30,18 +31,58 @@ describe('computeWindowState', () => {
 
     expect(state.status).toBe('open');
     expect(state.windowsElapsed).toBe(1);
+    // Anchored at the boundary itself while inside the grace period,
+    // not drifting forward with "now".
+    expect(state.nextWindowAt).toEqual(new Date(killedAt.getTime() + 4 * HOUR));
   });
 
-  it('stays open and keeps counting elapsed windows indefinitely', () => {
+  it('stays open for the whole grace period, still anchored at the boundary', () => {
     const killedAt = new Date('2026-01-01T00:00:00Z');
-    const now = new Date(killedAt.getTime() + 13 * HOUR); // 3 full windows + partial 4th
+    const now = new Date(killedAt.getTime() + 4 * HOUR + 9 * MIN); // 9 min in
     const state = computeWindowState(killedAt, 4, now);
 
     expect(state.status).toBe('open');
-    expect(state.windowsElapsed).toBe(3);
+    expect(state.windowsElapsed).toBe(1);
+    expect(state.nextWindowAt).toEqual(new Date(killedAt.getTime() + 4 * HOUR));
+  });
+
+  it('auto-advances to the next boundary right after the 10-minute grace period expires', () => {
+    const killedAt = new Date('2026-01-01T00:00:00Z');
+    const now = new Date(killedAt.getTime() + 4 * HOUR + 11 * MIN); // 1 min past grace
+    const state = computeWindowState(killedAt, 4, now);
+
+    // No longer "open" - it's rolled forward and looks like a fresh cycle.
+    expect(state.status).toBe('locked');
+    expect(state.windowsElapsed).toBe(1); // miss count is still tracked...
+    // ...but nextWindowAt has jumped to the *next* boundary (8h mark),
+    // not the one that was just missed.
+    expect(state.nextWindowAt).toEqual(new Date(killedAt.getTime() + 8 * HOUR));
+  });
+
+  it('keeps rolling forward correctly across multiple missed windows', () => {
+    const killedAt = new Date('2026-01-01T00:00:00Z');
+    // 2 full windows missed (8h), now 15 min into the 3rd window - past
+    // that window's own grace period too.
+    const now = new Date(killedAt.getTime() + 8 * HOUR + 15 * MIN);
+    const state = computeWindowState(killedAt, 4, now);
+
+    expect(state.status).toBe('locked');
+    expect(state.windowsElapsed).toBe(2);
     expect(state.nextWindowAt).toEqual(
-      new Date(killedAt.getTime() + 16 * HOUR),
+      new Date(killedAt.getTime() + 12 * HOUR),
     );
+  });
+
+  it('shows opening_soon once close to a rolled-forward boundary', () => {
+    const killedAt = new Date('2026-01-01T00:00:00Z');
+    // Past the first window and its grace period, and now within 30 min
+    // of the *next* boundary (8h mark).
+    const now = new Date(killedAt.getTime() + 8 * HOUR - 20 * MIN);
+    const state = computeWindowState(killedAt, 4, now);
+
+    expect(state.status).toBe('opening_soon');
+    expect(state.windowsElapsed).toBe(1);
+    expect(state.nextWindowAt).toEqual(new Date(killedAt.getTime() + 8 * HOUR));
   });
 
   it('treats clock skew (now before killedAt) as windowsElapsed 0, not negative', () => {
@@ -59,43 +100,47 @@ describe('computeWindowState', () => {
 });
 
 describe('compareByUrgency', () => {
-  const open3 = {
-    windowsElapsed: 3,
-    nextWindowAt: new Date(3000),
-    status: 'open' as const,
-  };
-  const open1 = {
-    windowsElapsed: 1,
-    nextWindowAt: new Date(1000),
-    status: 'open' as const,
-  };
-  const soonAt2000 = {
-    windowsElapsed: 0,
-    nextWindowAt: new Date(2000),
-    status: 'opening_soon' as const,
-  };
-  const lockedAt5000 = {
-    windowsElapsed: 0,
-    nextWindowAt: new Date(5000),
-    status: 'locked' as const,
-  };
+  it('sorts purely by nextWindowAt, ignoring status entirely', () => {
+    // A "locked" channel due soon outranks an "open" channel due later -
+    // this is the explicit tradeoff of dropping the status-tier sort.
+    const openButLate = {
+      nextWindowAt: new Date('2026-01-01T10:00:00Z'),
+      channel: 19,
+      status: 'open' as const,
+    };
+    const lockedButSoon = {
+      nextWindowAt: new Date('2026-01-01T06:35:00Z'),
+      channel: 5,
+      status: 'locked' as const,
+    };
 
-  it('ranks open above opening_soon above locked regardless of timestamps', () => {
-    const sorted = [lockedAt5000, soonAt2000, open1].sort(compareByUrgency);
-    expect(sorted.map((s) => s.status)).toEqual([
-      'open',
-      'opening_soon',
-      'locked',
-    ]);
+    const sorted = [openButLate, lockedButSoon].sort(compareByUrgency);
+    expect(sorted[0]).toBe(lockedButSoon);
   });
 
-  it('within open, ranks the most-overdue (highest windowsElapsed) first', () => {
-    const sorted = [open1, open3].sort(compareByUrgency);
-    expect(sorted[0]).toBe(open3);
+  it('puts a missed-then-rolled-forward channel right next to a freshly killed one landing on the same boundary', () => {
+    // Ch4 missed at 6:27 PM -> rolls forward to 10:27 PM.
+    const ch4RolledForward = {
+      nextWindowAt: new Date('2026-01-01T22:27:00Z'),
+      channel: 4,
+    };
+    // Ch5 killed at 6:27 PM -> next window also 10:27 PM.
+    const ch5FreshKill = {
+      nextWindowAt: new Date('2026-01-01T22:27:00Z'),
+      channel: 5,
+    };
+
+    const sorted = [ch5FreshKill, ch4RolledForward].sort(compareByUrgency);
+    // Same instant -> tie-break by channel number, lowest first.
+    expect(sorted.map((s) => s.channel)).toEqual([4, 5]);
   });
 
-  it('within locked/opening_soon, ranks soonest nextWindowAt first', () => {
-    const sorted = [lockedAt5000, soonAt2000].sort(compareByUrgency);
-    expect(sorted[0]).toBe(soonAt2000);
+  it('breaks exact ties by channel number ascending', () => {
+    const same = new Date('2026-01-01T00:00:00Z');
+    const a = { nextWindowAt: same, channel: 12 };
+    const b = { nextWindowAt: same, channel: 3 };
+
+    const sorted = [a, b].sort(compareByUrgency);
+    expect(sorted.map((s) => s.channel)).toEqual([3, 12]);
   });
 });

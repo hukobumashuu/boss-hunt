@@ -19,17 +19,22 @@ export function TrackerRow({ entry, now }: { entry: TrackerEntry; now: Date }) {
   const logKill = useLogKill();
   const [duplicate, setDuplicate] = useState<DuplicateInfo | null>(null);
 
-  const killedAtLabel = `Killed ${formatTimeOfDay(entry.lastKilledAt)}`;
-  // "Didn't respawn Nx" - windowsElapsed is already computed server-side
-  // from elapsed time alone, no separate "log a miss" action exists or
-  // is needed; this is just putting it in words a hunter would say,
-  // instead of the more technical "N windows passed".
-  const statusDetail =
+  // Headline flip: the thing you act on is "when do I go back", not
+  // "when did it die" - so the countdown/next-check time is now the big
+  // text, and the kill time is demoted to a small secondary line.
+  const nextCheckLabel =
     entry.status === "open"
-      ? entry.windowsElapsed > 0
-        ? `Didn't respawn ${entry.windowsElapsed}x`
-        : "May be up"
-      : `Opens in ${formatCountdown(entry.nextWindowAt, now)}`;
+      ? "May be up now"
+      : `Next check: ${formatCountdown(entry.nextWindowAt, now)}`;
+  const killedAtLabel = `Last killed ${formatTimeOfDay(entry.lastKilledAt)}`;
+
+  // windowsElapsed keeps counting real misses even after the row has
+  // rolled forward and gone back to "locked" - it no longer affects
+  // sorting or the status color, it's just an honest "this has actually
+  // been missed before" note so that information isn't silently lost
+  // once the row leaves the top of the list.
+  const missedNote =
+    entry.windowsElapsed > 0 ? `Missed ${entry.windowsElapsed}x` : null;
 
   function handleLog(force: boolean) {
     logKill.mutate(
@@ -47,6 +52,7 @@ export function TrackerRow({ entry, now }: { entry: TrackerEntry; now: Date }) {
 
   return (
     <li className={`row row--${entry.status}`}>
+      {/* Status color only - never affects position in the list. */}
       <div className="row__status-dot" aria-hidden="true" />
       <div className="row__main">
         <div className="row__title">
@@ -54,13 +60,20 @@ export function TrackerRow({ entry, now }: { entry: TrackerEntry; now: Date }) {
           <span className="row__channel">Ch {entry.channel}</span>
         </div>
         <div className="row__detail">
-          <span>{killedAtLabel}</span>
+          <span className="row__next-check">{nextCheckLabel}</span>
           <span aria-hidden="true"> · </span>
           <span className="row__status-label">
             {STATUS_LABEL[entry.status]}
           </span>
-          <span aria-hidden="true"> · </span>
-          <span>{statusDetail}</span>
+          {missedNote && (
+            <>
+              <span aria-hidden="true"> · </span>
+              <span className="row__missed-note">{missedNote}</span>
+            </>
+          )}
+        </div>
+        <div className="row__detail row__detail--secondary">
+          <span>{killedAtLabel}</span>
         </div>
         {duplicate && (
           <div className="row__confirm">

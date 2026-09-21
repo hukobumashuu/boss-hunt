@@ -26,7 +26,13 @@ export function TrackerRow({ entry, now }: { entry: TrackerEntry; now: Date }) {
     entry.status === "open"
       ? "May be up now"
       : `Next check: ${formatCountdown(entry.nextWindowAt, now)}`;
-  const killedAtLabel = `Last killed ${formatTimeOfDay(entry.lastKilledAt)}`;
+  // Secondary line: the clock time to act on, not the clock time that
+  // already happened. This applies even while status is "open" - the
+  // window is pinned at the boundary it just crossed (see
+  // tracker.derivation.ts), so this line keeps showing that same anchor
+  // straight through the grace period and into whatever it advances to
+  // next, instead of freezing on when the boss last died.
+  const nextCheckTimeLabel = `Check at ${formatTimeOfDay(entry.nextWindowAt)}`;
 
   // windowsElapsed keeps counting real misses even after the row has
   // rolled forward and gone back to "locked" - it no longer affects
@@ -73,7 +79,7 @@ export function TrackerRow({ entry, now }: { entry: TrackerEntry; now: Date }) {
           )}
         </div>
         <div className="row__detail row__detail--secondary">
-          <span>{killedAtLabel}</span>
+          <span>{nextCheckTimeLabel}</span>
         </div>
         {duplicate && (
           <div className="row__confirm">

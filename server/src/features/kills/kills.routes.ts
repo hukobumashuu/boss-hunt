@@ -16,3 +16,4 @@ killRoutes.post(
   validateBody(logKillBodySchema),
   controller.logKill,
 );
+killRoutes.post('/api/kills/:id/void', controller.voidKill);

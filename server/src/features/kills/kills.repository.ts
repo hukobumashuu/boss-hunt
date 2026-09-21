@@ -1,9 +1,10 @@
-import { and, desc, eq, gte } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import type { Database } from '../../config/db';
 import { killEvents, bosses, loggers } from '../../db/schema';
 import type { KillEvent } from '../../db/schema';
 
-export interface RecentKill {
+export interface LatestKillInfo {
+  id: number;
   killedAt: Date;
   loggerName: string;
 }
@@ -20,28 +21,42 @@ export class KillRepository {
     return boss ?? null;
   }
 
-  /** Most recent kill for this boss+channel logged within `sinceMs` of now,
-   * joined to the logger's name for the duplicate-warning message. */
-  async findRecentKill(
+  /** Most recent non-voided kill for this boss+channel, joined to the
+   * logger's name for the "not due yet" warning. No time lookback - the
+   * caller runs this through computeWindowState (the same math the
+   * tracker uses) to decide whether it's actually due, instead of a
+   * fixed cutoff that has no idea what "due" means. */
+  async findLatestKill(
     bossId: number,
     channel: number,
-    sinceMs: number,
-  ): Promise<RecentKill | null> {
-    const cutoff = new Date(Date.now() - sinceMs);
-    const [recent] = await this.db
-      .select({ killedAt: killEvents.killedAt, loggerName: loggers.name })
+  ): Promise<LatestKillInfo | null> {
+    const [latest] = await this.db
+      .select({
+        id: killEvents.id,
+        killedAt: killEvents.killedAt,
+        loggerName: loggers.name,
+      })
       .from(killEvents)
       .innerJoin(loggers, eq(killEvents.loggerId, loggers.id))
       .where(
         and(
           eq(killEvents.bossId, bossId),
           eq(killEvents.channel, channel),
-          gte(killEvents.killedAt, cutoff),
+          isNull(killEvents.voidedAt),
         ),
       )
       .orderBy(desc(killEvents.killedAt))
       .limit(1);
-    return recent ?? null;
+    return latest ?? null;
+  }
+
+  async findKillById(id: number): Promise<KillEvent | null> {
+    const [kill] = await this.db
+      .select()
+      .from(killEvents)
+      .where(eq(killEvents.id, id))
+      .limit(1);
+    return kill ?? null;
   }
 
   /** Insert a kill. Server sets killedAt via DB default(now()); loggerId
@@ -60,5 +75,21 @@ export class KillRepository {
       throw new Error('Insert did not return a row');
     }
     return inserted;
+  }
+
+  /**
+   * Marks a kill voided instead of deleting it - the log stays literally
+   * append-only, this only adds a fact ("this entry doesn't count")
+   * on top of it, it never removes one. The `voidedAt IS NULL` guard
+   * makes double-voiding a no-op instead of clobbering the original
+   * void timestamp.
+   */
+  async voidKillById(id: number, now: Date): Promise<KillEvent | null> {
+    const [voided] = await this.db
+      .update(killEvents)
+      .set({ voidedAt: now })
+      .where(and(eq(killEvents.id, id), isNull(killEvents.voidedAt)))
+      .returning();
+    return voided ?? null;
   }
 }

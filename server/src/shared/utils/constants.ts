@@ -15,6 +15,8 @@ export const KNOWN_LOGGERS = [
 ] as const;
 export type LoggerName = (typeof KNOWN_LOGGERS)[number];
 
-/** Soft-duplicate guard: warn (not block) if the same boss+channel was
- * logged within this many milliseconds. */
-export const DUPLICATE_WINDOW_MS = 2 * 60 * 1000;
+/** How long after logging a kill its own logger can void it - long
+ * enough to catch "wrong boss/channel" in the same breath, short enough
+ * that voiding never rewrites something the group has already acted on. */
+export const VOID_WINDOW_MINUTES = 5;
+export const VOID_WINDOW_MS = VOID_WINDOW_MINUTES * 60 * 1000;

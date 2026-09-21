@@ -1,0 +1,1 @@
+ALTER TABLE "kill_events" ADD COLUMN "voided_at" timestamp with time zone;

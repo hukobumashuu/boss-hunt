@@ -1,12 +1,12 @@
-import { getToken } from './auth';
+import { getToken } from "./auth";
 import type {
   ApiErrorBody,
   Boss,
   DuplicateKillWarning,
   TrackerEntry,
-} from './types';
+} from "./types";
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:4100';
+const BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4100";
 
 /**
  * Carries the HTTP status so callers can tell "not authenticated" (401),
@@ -21,7 +21,7 @@ export class ApiError<T = undefined> extends Error {
     public readonly data?: T,
   ) {
     super(message);
-    this.name = 'ApiError';
+    this.name = "ApiError";
   }
 }
 
@@ -30,7 +30,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     ...init,
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...init?.headers,
     },
@@ -47,11 +47,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export function fetchTracker(): Promise<TrackerEntry[]> {
-  return request<TrackerEntry[]>('/api/tracker');
+  return request<TrackerEntry[]>("/api/tracker");
 }
 
 export function fetchBosses(): Promise<Boss[]> {
-  return request<Boss[]>('/api/bosses');
+  return request<Boss[]>("/api/bosses");
 }
 
 export function logKill(input: {
@@ -59,10 +59,16 @@ export function logKill(input: {
   channel: number;
   force?: boolean;
 }) {
-  return request<{ id: number; loggedByName: string }>('/api/kills', {
-    method: 'POST',
+  return request<{ id: number; loggedByName: string }>("/api/kills", {
+    method: "POST",
     body: JSON.stringify(input),
   });
+}
+
+/** Undo a mistaken log. The server enforces who can void what and until
+ * when - this just calls it; see kills.service.ts's voidKill. */
+export function voidKill(killId: number) {
+  return request<null>(`/api/kills/${killId}/void`, { method: "POST" });
 }
 
 export type { DuplicateKillWarning };

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Boss } from "../lib/types";
 import { ApiError } from "../lib/api";
-import { useLogKill } from "../lib/queries";
+import { useLogKill, useVoidKill } from "../lib/queries";
 import { getBossLetter } from "../lib/bossShorthand";
 
 interface PendingDuplicate {
@@ -9,6 +9,14 @@ interface PendingDuplicate {
   lastLoggedBy: string;
   lastKilledAt: string;
 }
+
+// How long the "Undo" affordance stays visible after a successful log.
+// Well under the server's own VOID_WINDOW_MINUTES (5) - this is for
+// catching a fat-fingered boss/channel in the same breath, not for
+// browsing back through history. If it's been longer than this, voiding
+// from the tracker row's own confirm-free path isn't offered at all;
+// treat it as done and log a correction the normal way instead.
+const UNDO_VISIBLE_MS = 8_000;
 
 const CHANNELS = Array.from({ length: 30 }, (_, i) => i + 1);
 
@@ -18,19 +26,33 @@ export function LogKillForm({ bosses }: { bosses: Boss[] }) {
   const [lastLoggedChannel, setLastLoggedChannel] = useState<number | null>(
     null,
   );
+  const [undoable, setUndoable] = useState<{
+    id: number;
+    channel: number;
+  } | null>(null);
+  const [undoError, setUndoError] = useState<string | null>(null);
   const logKill = useLogKill();
+  const voidKill = useVoidKill();
 
   function handleChannelTap(channel: number, force: boolean) {
     if (!selectedBoss) return;
     logKill.mutate(
       { bossId: selectedBoss.id, channel, force },
       {
-        onSuccess: () => {
+        onSuccess: (result) => {
           setDuplicate(null);
+          setUndoError(null);
           setLastLoggedChannel(channel);
           // Stay on the same boss - the next kill you log is often the
           // same boss on a different channel, not a different boss.
           window.setTimeout(() => setLastLoggedChannel(null), 2000);
+
+          setUndoable({ id: result.id, channel });
+          window.setTimeout(() => {
+            setUndoable((current) =>
+              current?.id === result.id ? null : current,
+            );
+          }, UNDO_VISIBLE_MS);
         },
         onError: (err) => {
           if (err instanceof ApiError && err.status === 409 && err.data) {
@@ -43,6 +65,26 @@ export function LogKillForm({ bosses }: { bosses: Boss[] }) {
         },
       },
     );
+  }
+
+  function handleUndo() {
+    if (!undoable) return;
+    const { id } = undoable;
+    voidKill.mutate(id, {
+      onSuccess: () => {
+        setUndoable((current) => (current?.id === id ? null : current));
+      },
+      onError: () => {
+        // Most likely: the window already lapsed server-side, or a
+        // newer kill landed for this channel in the meantime - either
+        // way there's nothing left to undo, so drop the affordance
+        // rather than let someone retry into the same rejection.
+        setUndoable((current) => (current?.id === id ? null : current));
+        setUndoError(
+          "Couldn't undo that - it may be too late, or someone already logged a newer kill for this channel.",
+        );
+      },
+    });
   }
 
   if (!selectedBoss) {
@@ -101,6 +143,26 @@ export function LogKillForm({ bosses }: { bosses: Boss[] }) {
           </button>
         ))}
       </div>
+
+      {undoable && (
+        <div className="row__confirm">
+          <span>Logged Ch {undoable.channel}.</span>
+          <div className="row__confirm-actions">
+            <button
+              type="button"
+              className="button button--ghost"
+              onClick={handleUndo}
+              disabled={voidKill.isPending}
+            >
+              {voidKill.isPending ? "Undoing…" : "Undo"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {undoError && (
+        <p className="status-text status-text--error">{undoError}</p>
+      )}
 
       {duplicate && (
         <div className="row__confirm">

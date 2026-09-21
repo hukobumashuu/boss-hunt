@@ -1,5 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { fetchBosses, fetchTracker, logKill } from './api';
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { fetchBosses, fetchTracker, logKill, voidKill } from "./api";
 
 /** Polling, not WebSockets - a countdown doesn't need true real-time,
  * and this matches the plan's original call to avoid infra this small
@@ -8,7 +8,7 @@ const POLL_INTERVAL_MS = 20_000;
 
 export function useTracker() {
   return useQuery({
-    queryKey: ['tracker'],
+    queryKey: ["tracker"],
     queryFn: fetchTracker,
     refetchInterval: POLL_INTERVAL_MS,
   });
@@ -16,7 +16,7 @@ export function useTracker() {
 
 export function useBosses() {
   return useQuery({
-    queryKey: ['bosses'],
+    queryKey: ["bosses"],
     queryFn: fetchBosses,
     staleTime: Infinity, // static reference data, ~5 rows, rarely changes
   });
@@ -30,7 +30,17 @@ export function useLogKill() {
       // Refetch immediately rather than wait for the next poll tick -
       // the person just tapped the button, they expect the row to
       // update now, not in up to 20 more seconds.
-      void queryClient.invalidateQueries({ queryKey: ['tracker'] });
+      void queryClient.invalidateQueries({ queryKey: ["tracker"] });
+    },
+  });
+}
+
+export function useVoidKill() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: voidKill,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["tracker"] });
     },
   });
 }

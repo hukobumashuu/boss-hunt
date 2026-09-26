@@ -1,4 +1,5 @@
 import type { KillRepository } from './kills.repository';
+import type { ResetRepository } from '../resets/resets.repository';
 import type { LogKillBody } from './kills.types';
 import {
   NotFoundError,
@@ -7,8 +8,23 @@ import {
   VoidNotAllowedError,
 } from '../../shared/utils/app-error';
 import { VOID_WINDOW_MS } from '../../shared/utils/constants';
-import { computeWindowState } from '../tracker/tracker.derivation';
+import {
+  computeWindowState,
+  effectiveLastKilledAt,
+  STALE_MISSED_THRESHOLD,
+} from '../tracker/tracker.derivation';
 import type { KillEvent } from '../../db/schema';
+
+/** en-PH, 12h clock - matches how the client already formats times, so
+ * a warning surfaced verbatim from here reads the same as the rest of
+ * the app instead of a raw ISO string. */
+function formatTime(d: Date): string {
+  return d.toLocaleTimeString('en-PH', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
 
 export interface AuthenticatedLogger {
   id: number;
@@ -20,7 +36,10 @@ export interface LoggedKill extends KillEvent {
 }
 
 export class KillService {
-  constructor(private readonly repo: KillRepository) {}
+  constructor(
+    private readonly repo: KillRepository,
+    private readonly resetRepo: ResetRepository,
+  ) {}
 
   async logKill(
     input: LogKillBody,
@@ -37,26 +56,41 @@ export class KillService {
         input.bossId,
         input.channel,
       );
-      // A prior kill only blocks a new one while its own window hasn't
-      // opened - the same math the tracker uses to color a row, run here
-      // before the insert instead of after. This replaces a raw "was
-      // something logged in the last 2 minutes" lookback: that caught
-      // two people double-tapping the same kill, but had no idea whether
-      // the channel was actually due, so a kill logged 3 hours into a
-      // 4-hour window sailed straight through it. A fresh double-tap is
-      // still caught here for free - the first tap makes the channel
-      // `locked` again immediately, so the second tap lands right back
-      // in this same branch.
       if (latest) {
-        const window = computeWindowState(
+        // Reset-aware baseline: a maintenance restart brings every boss
+        // back up regardless of its own timer, so a real kill from
+        // before the most recent restart can't be used to block a new
+        // one - see tracker.derivation.ts's effectiveLastKilledAt.
+        const latestReset = await this.resetRepo.findLatest();
+        const baseline = effectiveLastKilledAt(
           latest.killedAt,
+          boss.respawnIntervalHours,
+          latestReset?.resetAt ?? null,
+        );
+        const window = computeWindowState(
+          baseline,
           boss.respawnIntervalHours,
           now,
         );
+        // A prior kill only blocks a new one while its own window
+        // hasn't opened - the same math the tracker uses to color a
+        // row, run here before the insert instead of after.
         if (window.status !== 'open') {
           throw new DuplicateKillWarning(
             `${latest.loggerName} already logged Ch ${input.channel} - ` +
-              `not due until ${window.nextWindowAt.toISOString()}. Log anyway?`,
+              `not due until ${formatTime(window.nextWindowAt)}. Log anyway?`,
+            latest.loggerName,
+            latest.killedAt,
+          );
+        }
+        // Due, but nobody's confirmed it in a long time - probably a
+        // different group's now. Same warn-then-force flow as above,
+        // not a separate mechanism.
+        if (window.windowsElapsed >= STALE_MISSED_THRESHOLD) {
+          throw new DuplicateKillWarning(
+            `Ch ${input.channel} hasn't been confirmed in ` +
+              `${window.windowsElapsed} cycles - might not be ours ` +
+              `anymore. Log anyway?`,
             latest.loggerName,
             latest.killedAt,
           );

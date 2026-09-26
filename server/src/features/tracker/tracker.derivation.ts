@@ -48,6 +48,11 @@ const OPENING_SOON_THRESHOLD_MINUTES = 30;
 const GRACE_PERIOD_MINUTES = 10;
 const GRACE_PERIOD_MS = GRACE_PERIOD_MINUTES * 60 * 1000;
 
+/** windowsElapsed at or above this means "probably someone else's now" -
+ * used to demote/exclude on the client and to soft-confirm a log
+ * server-side. Not enforced here; computeWindowState stays pure. */
+export const STALE_MISSED_THRESHOLD = 5;
+
 export function computeWindowState(
   lastKilledAt: Date,
   respawnIntervalHours: number,
@@ -89,7 +94,7 @@ export function computeWindowState(
       lastKilledAt.getTime() + ticksPassed * intervalMs,
     );
     return {
-      windowsElapsed: ticksPassed,
+      windowsElapsed: ticksPassed - 1,
       nextWindowAt,
       status: 'open',
     };
@@ -117,6 +122,18 @@ function deriveApproachStatus(nextWindowAt: Date, now: Date): WindowStatus {
   return minutesUntilNext <= OPENING_SOON_THRESHOLD_MINUTES
     ? 'opening_soon'
     : 'locked';
+}
+
+export function effectiveLastKilledAt(
+  realLastKilledAt: Date,
+  respawnIntervalHours: number,
+  latestResetAt: Date | null,
+): Date {
+  if (!latestResetAt || latestResetAt <= realLastKilledAt) {
+    return realLastKilledAt;
+  }
+  const intervalMs = respawnIntervalHours * 60 * 60 * 1000;
+  return new Date(latestResetAt.getTime() - intervalMs);
 }
 
 /**

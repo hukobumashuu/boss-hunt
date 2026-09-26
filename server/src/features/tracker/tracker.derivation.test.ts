@@ -24,13 +24,16 @@ describe('computeWindowState', () => {
     expect(state.windowsElapsed).toBe(0);
   });
 
-  it('flips to open the instant the first window boundary passes', () => {
+  it('flips to open the instant the first window boundary passes, with nothing confirmed missed yet', () => {
     const killedAt = new Date('2026-01-01T00:00:00Z');
     const now = new Date(killedAt.getTime() + 4 * HOUR + 1); // 1ms past
     const state = computeWindowState(killedAt, 4, now);
 
     expect(state.status).toBe('open');
-    expect(state.windowsElapsed).toBe(1);
+    // Still inside this boundary's own grace period - it hasn't been
+    // confirmed missed, it's still live. windowsElapsed only counts
+    // PAST, grace-expired boundaries.
+    expect(state.windowsElapsed).toBe(0);
     // Anchored at the boundary itself while inside the grace period,
     // not drifting forward with "now".
     expect(state.nextWindowAt).toEqual(new Date(killedAt.getTime() + 4 * HOUR));
@@ -42,18 +45,20 @@ describe('computeWindowState', () => {
     const state = computeWindowState(killedAt, 4, now);
 
     expect(state.status).toBe('open');
-    expect(state.windowsElapsed).toBe(1);
+    expect(state.windowsElapsed).toBe(0);
     expect(state.nextWindowAt).toEqual(new Date(killedAt.getTime() + 4 * HOUR));
   });
 
-  it('auto-advances to the next boundary right after the 10-minute grace period expires', () => {
+  it("bumps windowsElapsed to 1 only once this boundary's own grace period expires", () => {
     const killedAt = new Date('2026-01-01T00:00:00Z');
     const now = new Date(killedAt.getTime() + 4 * HOUR + 11 * MIN); // 1 min past grace
     const state = computeWindowState(killedAt, 4, now);
 
     // No longer "open" - it's rolled forward and looks like a fresh cycle.
     expect(state.status).toBe('locked');
-    expect(state.windowsElapsed).toBe(1); // miss count is still tracked...
+    // This is the moment the count actually increments - grace just
+    // expired with nothing logged, so this boundary is now confirmed missed.
+    expect(state.windowsElapsed).toBe(1);
     // ...but nextWindowAt has jumped to the *next* boundary (8h mark),
     // not the one that was just missed.
     expect(state.nextWindowAt).toEqual(new Date(killedAt.getTime() + 8 * HOUR));

@@ -15,6 +15,13 @@
       "when": 1789655145639,
       "tag": "0001_safe_mandroid",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790072188017,
+      "tag": "0002_petite_cyclops",
+      "breakpoints": true
     }
   ]
 }

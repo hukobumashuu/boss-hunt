@@ -2,18 +2,12 @@ import { getToken } from "./auth";
 import type {
   ApiErrorBody,
   Boss,
+  CoverageEntry,
   DuplicateKillWarning,
   TrackerEntry,
 } from "./types";
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4100";
-
-/**
- * Carries the HTTP status so callers can tell "not authenticated" (401),
- * "someone else just logged this" (409, with lastLoggedBy/lastKilledAt in
- * `data`), and "too many requests" (429) apart - each needs different UI,
- * not just a generic error message.
- */
 export class ApiError<T = undefined> extends Error {
   constructor(
     public readonly status: number,
@@ -65,10 +59,18 @@ export function logKill(input: {
   });
 }
 
-/** Undo a mistaken log. The server enforces who can void what and until
- * when - this just calls it; see kills.service.ts's voidKill. */
 export function voidKill(killId: number) {
   return request<null>(`/api/kills/${killId}/void`, { method: "POST" });
+}
+
+export function logMaintenanceReset() {
+  return request<{ id: number; resetAt: string }>("/api/resets", {
+    method: "POST",
+  });
+}
+
+export function fetchCoverage() {
+  return request<CoverageEntry[]>("/api/coverage");
 }
 
 export type { DuplicateKillWarning };

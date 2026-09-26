@@ -1,7 +1,3 @@
-// Mirrors server/src/shared/utils/api-response.ts. No shared package
-// between server and client at this scale - two small type files kept in
-// sync by hand is less overhead than a monorepo package boundary would be.
-
 export interface ApiFieldError {
   field: string;
   message: string;
@@ -20,7 +16,7 @@ export interface ApiErrorBody<T = undefined> {
   data?: T;
 }
 
-export type WindowStatus = 'locked' | 'opening_soon' | 'open';
+export type WindowStatus = "locked" | "opening_soon" | "open";
 
 export interface TrackerEntry {
   bossId: number;
@@ -43,4 +39,11 @@ export interface Boss {
 export interface DuplicateKillWarning {
   lastLoggedBy: string;
   lastKilledAt: string;
+}
+
+export interface CoverageEntry {
+  bossId: number;
+  bossName: string;
+  missing: number[];
+  stale: { channel: number; missed: number }[];
 }

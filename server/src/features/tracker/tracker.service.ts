@@ -1,16 +1,32 @@
 import type { TrackerRepository } from './tracker.repository';
-import { computeWindowState, compareByUrgency } from './tracker.derivation';
+import type { ResetRepository } from '../resets/resets.repository';
+import {
+  computeWindowState,
+  compareByUrgency,
+  effectiveLastKilledAt,
+} from './tracker.derivation';
 import type { TrackerEntry } from './tracker.types';
 
 export class TrackerService {
-  constructor(private readonly repo: TrackerRepository) {}
+  constructor(
+    private readonly repo: TrackerRepository,
+    private readonly resetRepo: ResetRepository,
+  ) {}
 
   async getTracker(now: Date = new Date()): Promise<TrackerEntry[]> {
-    const rows = await this.repo.findLatestKillPerBossChannel();
+    const [rows, latestReset] = await Promise.all([
+      this.repo.findLatestKillPerBossChannel(),
+      this.resetRepo.findLatest(),
+    ]);
 
     const entries: TrackerEntry[] = rows.map((row) => {
-      const window = computeWindowState(
+      const baseline = effectiveLastKilledAt(
         row.lastKilledAt,
+        row.respawnIntervalHours,
+        latestReset?.resetAt ?? null,
+      );
+      const window = computeWindowState(
+        baseline,
         row.respawnIntervalHours,
         now,
       );
@@ -23,6 +39,7 @@ export class TrackerService {
         nextWindowAt: window.nextWindowAt,
         windowsElapsed: window.windowsElapsed,
         status: window.status,
+        respawnIntervalHours: row.respawnIntervalHours,
       };
     });
 

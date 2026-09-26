@@ -8,9 +8,19 @@ export function formatCopyText(entries: TrackerEntry[], now: Date): string {
   const lines = entries
     .filter((entry) => entry.windowsElapsed < STALE_MISSED_THRESHOLD)
     .map((entry) => {
+      const displayAt =
+        entry.status === "open"
+          ? new Date(
+              new Date(entry.nextWindowAt).getTime() +
+                entry.respawnIntervalHours * 60 * 60 * 1000,
+            )
+          : new Date(entry.nextWindowAt);
+      return { entry, displayAt };
+    })
+    .sort((a, b) => a.displayAt.getTime() - b.displayAt.getTime())
+    .map(({ entry, displayAt }) => {
       const letter = getBossLetter(entry.bossName);
-      const time =
-        entry.status === "open" ? "NOW" : formatTimeOfDay(entry.nextWindowAt);
+      const time = formatTimeOfDay(displayAt.toISOString());
       const suffix =
         entry.windowsElapsed > 0 ? ` x${entry.windowsElapsed}` : "";
       return `${letter} ${entry.channel} ${time}${suffix}`;

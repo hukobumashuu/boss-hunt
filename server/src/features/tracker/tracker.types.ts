@@ -9,4 +9,5 @@ export interface TrackerEntry {
   nextWindowAt: Date;
   windowsElapsed: number;
   status: WindowStatus;
+  respawnIntervalHours: number;
 }

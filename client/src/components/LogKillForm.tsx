@@ -6,16 +6,9 @@ import { getBossLetter } from "../lib/bossShorthand";
 
 interface PendingDuplicate {
   channel: number;
-  lastLoggedBy: string;
-  lastKilledAt: string;
+  message: string;
 }
 
-// How long the "Undo" affordance stays visible after a successful log.
-// Well under the server's own VOID_WINDOW_MINUTES (5) - this is for
-// catching a fat-fingered boss/channel in the same breath, not for
-// browsing back through history. If it's been longer than this, voiding
-// from the tracker row's own confirm-free path isn't offered at all;
-// treat it as done and log a correction the normal way instead.
 const UNDO_VISIBLE_MS = 8_000;
 
 const CHANNELS = Array.from({ length: 30 }, (_, i) => i + 1);
@@ -43,8 +36,6 @@ export function LogKillForm({ bosses }: { bosses: Boss[] }) {
           setDuplicate(null);
           setUndoError(null);
           setLastLoggedChannel(channel);
-          // Stay on the same boss - the next kill you log is often the
-          // same boss on a different channel, not a different boss.
           window.setTimeout(() => setLastLoggedChannel(null), 2000);
 
           setUndoable({ id: result.id, channel });
@@ -55,12 +46,8 @@ export function LogKillForm({ bosses }: { bosses: Boss[] }) {
           }, UNDO_VISIBLE_MS);
         },
         onError: (err) => {
-          if (err instanceof ApiError && err.status === 409 && err.data) {
-            const data = err.data as {
-              lastLoggedBy: string;
-              lastKilledAt: string;
-            };
-            setDuplicate({ channel, ...data });
+          if (err instanceof ApiError && err.status === 409) {
+            setDuplicate({ channel, message: err.message });
           }
         },
       },
@@ -75,10 +62,6 @@ export function LogKillForm({ bosses }: { bosses: Boss[] }) {
         setUndoable((current) => (current?.id === id ? null : current));
       },
       onError: () => {
-        // Most likely: the window already lapsed server-side, or a
-        // newer kill landed for this channel in the meantime - either
-        // way there's nothing left to undo, so drop the affordance
-        // rather than let someone retry into the same rejection.
         setUndoable((current) => (current?.id === id ? null : current));
         setUndoError(
           "Couldn't undo that - it may be too late, or someone already logged a newer kill for this channel.",
@@ -166,15 +149,7 @@ export function LogKillForm({ bosses }: { bosses: Boss[] }) {
 
       {duplicate && (
         <div className="row__confirm">
-          <span>
-            {duplicate.lastLoggedBy} already logged Ch {duplicate.channel} at{" "}
-            {new Date(duplicate.lastKilledAt).toLocaleTimeString("en-PH", {
-              hour: "2-digit",
-              minute: "2-digit",
-              hour12: true,
-            })}
-            . Log anyway?
-          </span>
+          <span>{duplicate.message}</span>
           <div className="row__confirm-actions">
             <button
               type="button"

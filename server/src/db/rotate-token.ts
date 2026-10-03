@@ -12,15 +12,6 @@ function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
-/**
- * Usage: bun src/db/rotate-token.ts "Player1"
- *
- * Invalidates that person's old token immediately (the row's tokenHash
- * changes, so the old plaintext token no longer matches anything) and
- * prints a fresh bookmark link. This is the actual fix for "a token
- * leaked" - not a timer, an on-demand rotation of the one credential
- * that's compromised.
- */
 async function rotateToken() {
   const name = process.argv[2];
   if (!name) {
@@ -43,7 +34,7 @@ async function rotateToken() {
   }
 
   console.log(`\nRotated token for ${name}`);
-  console.log(`  new bookmark: ${env.ALLOWED_ORIGIN}/?token=${token}`);
+  console.log(`  new bookmark: ${env.ALLOWED_ORIGIN}/#token=${token}`);
   console.log('  their old link no longer works.');
   process.exit(0);
 }

@@ -15,11 +15,9 @@ import {
 } from '../tracker/tracker.derivation';
 import type { KillEvent } from '../../db/schema';
 
-/** en-PH, 12h clock - matches how the client already formats times, so
- * a warning surfaced verbatim from here reads the same as the rest of
- * the app instead of a raw ISO string. */
 function formatTime(d: Date): string {
   return d.toLocaleTimeString('en-PH', {
+    timeZone: 'Asia/Manila',
     hour: '2-digit',
     minute: '2-digit',
     hour12: true,
@@ -57,10 +55,6 @@ export class KillService {
         input.channel,
       );
       if (latest) {
-        // Reset-aware baseline: a maintenance restart brings every boss
-        // back up regardless of its own timer, so a real kill from
-        // before the most recent restart can't be used to block a new
-        // one - see tracker.derivation.ts's effectiveLastKilledAt.
         const latestReset = await this.resetRepo.findLatest();
         const baseline = effectiveLastKilledAt(
           latest.killedAt,
@@ -72,10 +66,10 @@ export class KillService {
           boss.respawnIntervalHours,
           now,
         );
-        // A prior kill only blocks a new one while its own window
-        // hasn't opened - the same math the tracker uses to color a
-        // row, run here before the insert instead of after.
-        if (window.status !== 'open') {
+        const firstBoundaryAt = new Date(
+          baseline.getTime() + boss.respawnIntervalHours * 60 * 60 * 1000,
+        );
+        if (now < firstBoundaryAt) {
           throw new DuplicateKillWarning(
             `${latest.loggerName} already logged Ch ${input.channel} - ` +
               `not due until ${formatTime(window.nextWindowAt)}. Log anyway?`,
@@ -83,9 +77,6 @@ export class KillService {
             latest.killedAt,
           );
         }
-        // Due, but nobody's confirmed it in a long time - probably a
-        // different group's now. Same warn-then-force flow as above,
-        // not a separate mechanism.
         if (window.windowsElapsed >= STALE_MISSED_THRESHOLD) {
           throw new DuplicateKillWarning(
             `Ch ${input.channel} hasn't been confirmed in ` +
@@ -104,19 +95,9 @@ export class KillService {
       loggerId: logger.id,
     });
 
-    // The controller already knows the logger's name from auth - no need
-    // for a second query just to echo it back in the response.
     return { ...inserted, loggedByName: logger.name };
   }
 
-  /**
-   * Void a mistaken kill log. Deliberately narrow: only the logger who
-   * created it, only within VOID_WINDOW_MS of logging it, and only if no
-   * newer kill has been logged for the same boss+channel since (voiding
-   * it at that point would rewrite what happened after it, not just
-   * correct a typo). Marks `voidedAt`; the row and everything on it stay
-   * exactly as originally written.
-   */
   async voidKill(
     killId: number,
     logger: AuthenticatedLogger,

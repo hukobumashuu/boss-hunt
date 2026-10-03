@@ -3,10 +3,8 @@ import { getBossLetter } from "./bossShorthand";
 import { formatTimeOfDay } from "./time";
 
 export function formatCopyText(entries: TrackerEntry[], now: Date): string {
-  const STALE_MISSED_THRESHOLD = 5;
-
   const lines = entries
-    .filter((entry) => entry.windowsElapsed < STALE_MISSED_THRESHOLD)
+    .filter((entry) => !entry.isStale)
     .map((entry) => {
       const displayAt =
         entry.status === "open"

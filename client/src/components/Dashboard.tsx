@@ -13,9 +13,6 @@ import type { CoverageEntry } from "../lib/types";
 
 const TICK_MS = 30_000;
 const COPIED_MESSAGE_MS = 2000;
-// Keep in sync with server's STALE_MISSED_THRESHOLD (see copyFormat.ts's
-// own copy of this note).
-const STALE_MISSED_THRESHOLD = 5;
 
 export function Dashboard() {
   const { data, error, isLoading } = useTracker();
@@ -36,22 +33,13 @@ export function Dashboard() {
     return () => clearInterval(id);
   }, []);
 
-  // Empty selection means "no filter" - show everything. Toggling any
-  // boss narrows the list to just what's selected; any combination is
-  // valid, including all five landing back on "everything".
   const visible = useMemo(() => {
     const all = data ?? [];
     if (selectedBossIds.size === 0) return all;
     return all.filter((entry) => selectedBossIds.has(entry.bossId));
   }, [data, selectedBossIds]);
 
-  // Grace period is already baked into windowsElapsed itself now (see
-  // tracker.derivation.ts) - it doesn't count a cycle as missed until
-  // that cycle's own grace period has actually run out. So the plain
-  // threshold check is correct here; no separate status carve-out
-  // needed.
-  const isStale = (e: (typeof visible)[number]) =>
-    e.windowsElapsed >= STALE_MISSED_THRESHOLD;
+  const isStale = (e: (typeof visible)[number]) => e.isStale;
   const active = useMemo(() => visible.filter((e) => !isStale(e)), [visible]);
   const stale = useMemo(() => visible.filter(isStale), [visible]);
 
@@ -87,7 +75,7 @@ export function Dashboard() {
 
   async function handleShowCoverage() {
     if (coverage) {
-      setCoverage(null); // toggle off if already showing
+      setCoverage(null);
       return;
     }
     setCoverageLoading(true);

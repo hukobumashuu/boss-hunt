@@ -4,6 +4,7 @@ import {
   computeWindowState,
   compareByUrgency,
   effectiveLastKilledAt,
+  isStaleWindow,
 } from './tracker.derivation';
 import type { TrackerEntry } from './tracker.types';
 
@@ -38,6 +39,7 @@ export class TrackerService {
         lastKilledAt: row.lastKilledAt,
         nextWindowAt: window.nextWindowAt,
         windowsElapsed: window.windowsElapsed,
+        isStale: isStaleWindow(window.windowsElapsed),
         status: window.status,
         respawnIntervalHours: row.respawnIntervalHours,
       };

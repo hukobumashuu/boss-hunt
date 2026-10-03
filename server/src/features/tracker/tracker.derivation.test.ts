@@ -7,7 +7,7 @@ const MIN = 60 * 1000;
 describe('computeWindowState', () => {
   it('is locked well before the first window', () => {
     const killedAt = new Date('2026-01-01T00:00:00Z');
-    const now = new Date('2026-01-01T02:00:00Z'); // 2h in, interval is 4h
+    const now = new Date('2026-01-01T02:00:00Z');
     const state = computeWindowState(killedAt, 4, now);
 
     expect(state.status).toBe('locked');
@@ -17,7 +17,7 @@ describe('computeWindowState', () => {
 
   it('flips to opening_soon inside the threshold before the first window', () => {
     const killedAt = new Date('2026-01-01T00:00:00Z');
-    const now = new Date('2026-01-01T03:45:00Z'); // 15 min before 4h mark
+    const now = new Date('2026-01-01T03:45:00Z');
     const state = computeWindowState(killedAt, 4, now);
 
     expect(state.status).toBe('opening_soon');
@@ -26,22 +26,17 @@ describe('computeWindowState', () => {
 
   it('flips to open the instant the first window boundary passes, with nothing confirmed missed yet', () => {
     const killedAt = new Date('2026-01-01T00:00:00Z');
-    const now = new Date(killedAt.getTime() + 4 * HOUR + 1); // 1ms past
+    const now = new Date(killedAt.getTime() + 4 * HOUR + 1);
     const state = computeWindowState(killedAt, 4, now);
 
     expect(state.status).toBe('open');
-    // Still inside this boundary's own grace period - it hasn't been
-    // confirmed missed, it's still live. windowsElapsed only counts
-    // PAST, grace-expired boundaries.
     expect(state.windowsElapsed).toBe(0);
-    // Anchored at the boundary itself while inside the grace period,
-    // not drifting forward with "now".
     expect(state.nextWindowAt).toEqual(new Date(killedAt.getTime() + 4 * HOUR));
   });
 
   it('stays open for the whole grace period, still anchored at the boundary', () => {
     const killedAt = new Date('2026-01-01T00:00:00Z');
-    const now = new Date(killedAt.getTime() + 4 * HOUR + 9 * MIN); // 9 min in
+    const now = new Date(killedAt.getTime() + 4 * HOUR + 9 * MIN);
     const state = computeWindowState(killedAt, 4, now);
 
     expect(state.status).toBe('open');
@@ -51,23 +46,16 @@ describe('computeWindowState', () => {
 
   it("bumps windowsElapsed to 1 only once this boundary's own grace period expires", () => {
     const killedAt = new Date('2026-01-01T00:00:00Z');
-    const now = new Date(killedAt.getTime() + 4 * HOUR + 11 * MIN); // 1 min past grace
+    const now = new Date(killedAt.getTime() + 4 * HOUR + 11 * MIN);
     const state = computeWindowState(killedAt, 4, now);
 
-    // No longer "open" - it's rolled forward and looks like a fresh cycle.
     expect(state.status).toBe('locked');
-    // This is the moment the count actually increments - grace just
-    // expired with nothing logged, so this boundary is now confirmed missed.
     expect(state.windowsElapsed).toBe(1);
-    // ...but nextWindowAt has jumped to the *next* boundary (8h mark),
-    // not the one that was just missed.
     expect(state.nextWindowAt).toEqual(new Date(killedAt.getTime() + 8 * HOUR));
   });
 
   it('keeps rolling forward correctly across multiple missed windows', () => {
     const killedAt = new Date('2026-01-01T00:00:00Z');
-    // 2 full windows missed (8h), now 15 min into the 3rd window - past
-    // that window's own grace period too.
     const now = new Date(killedAt.getTime() + 8 * HOUR + 15 * MIN);
     const state = computeWindowState(killedAt, 4, now);
 
@@ -80,8 +68,6 @@ describe('computeWindowState', () => {
 
   it('shows opening_soon once close to a rolled-forward boundary', () => {
     const killedAt = new Date('2026-01-01T00:00:00Z');
-    // Past the first window and its grace period, and now within 30 min
-    // of the *next* boundary (8h mark).
     const now = new Date(killedAt.getTime() + 8 * HOUR - 20 * MIN);
     const state = computeWindowState(killedAt, 4, now);
 
@@ -106,8 +92,6 @@ describe('computeWindowState', () => {
 
 describe('compareByUrgency', () => {
   it('sorts purely by nextWindowAt, ignoring status entirely', () => {
-    // A "locked" channel due soon outranks an "open" channel due later -
-    // this is the explicit tradeoff of dropping the status-tier sort.
     const openButLate = {
       nextWindowAt: new Date('2026-01-01T10:00:00Z'),
       channel: 19,
@@ -124,19 +108,16 @@ describe('compareByUrgency', () => {
   });
 
   it('puts a missed-then-rolled-forward channel right next to a freshly killed one landing on the same boundary', () => {
-    // Ch4 missed at 6:27 PM -> rolls forward to 10:27 PM.
     const ch4RolledForward = {
       nextWindowAt: new Date('2026-01-01T22:27:00Z'),
       channel: 4,
     };
-    // Ch5 killed at 6:27 PM -> next window also 10:27 PM.
     const ch5FreshKill = {
       nextWindowAt: new Date('2026-01-01T22:27:00Z'),
       channel: 5,
     };
 
     const sorted = [ch5FreshKill, ch4RolledForward].sort(compareByUrgency);
-    // Same instant -> tie-break by channel number, lowest first.
     expect(sorted.map((s) => s.channel)).toEqual([4, 5]);
   });
 

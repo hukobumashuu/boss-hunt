@@ -5,7 +5,6 @@ import { TrackerRepository } from './tracker.repository';
 import { TrackerService } from './tracker.service';
 import { ResetRepository } from '../resets/resets.repository';
 import { BossRepository } from '../bosses/bosses.repository';
-import { STALE_MISSED_THRESHOLD } from './tracker.derivation';
 import { successResponse } from '../../shared/utils/api-response';
 
 const trackerService = new TrackerService(
@@ -36,7 +35,7 @@ coverageRoutes.get(
           bossName: boss.name,
           missing: CHANNELS.filter((ch) => !known.has(ch)),
           stale: bossEntries
-            .filter((e) => e.windowsElapsed >= STALE_MISSED_THRESHOLD)
+            .filter((e) => e.isStale)
             .map((e) => ({ channel: e.channel, missed: e.windowsElapsed }))
             .sort((a, b) => a.channel - b.channel),
         };

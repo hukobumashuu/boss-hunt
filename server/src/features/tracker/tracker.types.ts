@@ -8,6 +8,7 @@ export interface TrackerEntry {
   lastKilledAt: Date;
   nextWindowAt: Date;
   windowsElapsed: number;
+  isStale: boolean;
   status: WindowStatus;
   respawnIntervalHours: number;
 }

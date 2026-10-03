@@ -26,6 +26,7 @@ export interface TrackerEntry {
   lastKilledAt: string;
   nextWindowAt: string;
   windowsElapsed: number;
+  isStale: boolean;
   status: WindowStatus;
   respawnIntervalHours: number;
 }

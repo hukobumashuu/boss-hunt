@@ -106,12 +106,8 @@
           "name": "kill_events_boss_id_bosses_id_fk",
           "tableFrom": "kill_events",
           "tableTo": "bosses",
-          "columnsFrom": [
-            "boss_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["boss_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -119,12 +115,8 @@
           "name": "kill_events_logger_id_loggers_id_fk",
           "tableFrom": "kill_events",
           "tableTo": "loggers",
-          "columnsFrom": [
-            "logger_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["logger_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -172,16 +164,12 @@
         "loggers_name_unique": {
           "name": "loggers_name_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "name"
-          ]
+          "columns": ["name"]
         },
         "loggers_token_hash_unique": {
           "name": "loggers_token_hash_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "token_hash"
-          ]
+          "columns": ["token_hash"]
         }
       },
       "policies": {},

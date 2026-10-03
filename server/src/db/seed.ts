@@ -2,7 +2,6 @@ import { db } from '../config/db';
 import { bosses } from './schema';
 import type { NewBoss } from './schema';
 
-/** Static reference data as of the current plan (2 maps, 5 bosses total). */
 const SEED_BOSSES: NewBoss[] = [
   { name: 'Faello', map: 'Lakeside', respawnIntervalHours: 4 },
   { name: 'Karion', map: 'Forgotten Ruin', respawnIntervalHours: 4 },
@@ -12,7 +11,11 @@ const SEED_BOSSES: NewBoss[] = [
 ];
 
 async function seed() {
-  const inserted = await db.insert(bosses).values(SEED_BOSSES).returning();
+  const inserted = await db
+    .insert(bosses)
+    .values(SEED_BOSSES)
+    .onConflictDoNothing({ target: bosses.name })
+    .returning();
   console.log(`Seeded ${inserted.length} bosses.`);
   process.exit(0);
 }

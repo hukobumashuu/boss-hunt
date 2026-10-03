@@ -1,10 +1,9 @@
 import { pgTable, serial, varchar, integer } from 'drizzle-orm/pg-core';
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
 
-/** Static reference data - ~5 rows, rarely changes. */
 export const bosses = pgTable('bosses', {
   id: serial('id').primaryKey(),
-  name: varchar('name', { length: 100 }).notNull(),
+  name: varchar('name', { length: 100 }).notNull().unique(),
   map: varchar('map', { length: 100 }).notNull(),
   respawnIntervalHours: integer('respawn_interval_hours').notNull().default(4),
 });

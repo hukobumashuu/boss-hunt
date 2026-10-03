@@ -13,14 +13,10 @@ import { env } from './config/env';
 
 export function createApp() {
   const app = express();
-  // Restricted to the one known frontend origin - the rate limiter below
-  // and the token check further down are what actually keep this a
-  // 4-person tool instead of a public one; CORS alone only stops
-  // browsers, not curl/bots.
+  app.set('trust proxy', 1);
   app.use(cors({ origin: env.ALLOWED_ORIGIN }));
   app.use(express.json());
 
-  // Public - Render's health check hits this before a logger token exists.
   app.get('/health', (_req, res) => {
     res.status(200).json(successResponse({ status: 'ok' }));
   });

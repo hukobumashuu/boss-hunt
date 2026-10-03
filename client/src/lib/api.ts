@@ -7,7 +7,16 @@ import type {
   TrackerEntry,
 } from "./types";
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4100";
+const configuredBaseUrl = import.meta.env.VITE_API_URL;
+
+if (import.meta.env.PROD && !configuredBaseUrl) {
+  throw new Error("VITE_API_URL is required for production builds");
+}
+
+const BASE_URL = (configuredBaseUrl ?? "http://localhost:4100").replace(
+  /\/$/,
+  "",
+);
 export class ApiError<T = undefined> extends Error {
   constructor(
     public readonly status: number,
@@ -30,11 +39,22 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     },
   });
 
-  const body = (await res.json()) as
-    | { success: true; message: string; data: T }
-    | ApiErrorBody<unknown>;
+  const responseText = await res.text();
+  let body: { success: true; message: string; data: T } | ApiErrorBody<unknown>;
 
-  if (!body.success) {
+  try {
+    body = JSON.parse(responseText) as
+      { success: true; message: string; data: T } | ApiErrorBody<unknown>;
+  } catch {
+    throw new ApiError(
+      res.status,
+      res.ok
+        ? "The server returned an invalid response."
+        : `Request failed (${res.status}).`,
+    );
+  }
+
+  if (!res.ok || !body.success) {
     throw new ApiError(res.status, body.message, body.data);
   }
   return body.data;

@@ -24,6 +24,7 @@ export function LogKillForm({ bosses }: { bosses: Boss[] }) {
     channel: number;
   } | null>(null);
   const [undoError, setUndoError] = useState<string | null>(null);
+  const [logError, setLogError] = useState<string | null>(null);
   const logKill = useLogKill();
   const voidKill = useVoidKill();
 
@@ -34,6 +35,7 @@ export function LogKillForm({ bosses }: { bosses: Boss[] }) {
       {
         onSuccess: (result) => {
           setDuplicate(null);
+          setLogError(null);
           setUndoError(null);
           setLastLoggedChannel(channel);
           window.setTimeout(() => setLastLoggedChannel(null), 2000);
@@ -48,7 +50,13 @@ export function LogKillForm({ bosses }: { bosses: Boss[] }) {
         onError: (err) => {
           if (err instanceof ApiError && err.status === 409) {
             setDuplicate({ channel, message: err.message });
+            return;
           }
+          setLogError(
+            err instanceof ApiError
+              ? err.message
+              : "Couldn't log that kill. Check your connection and try again.",
+          );
         },
       },
     );
@@ -146,6 +154,8 @@ export function LogKillForm({ bosses }: { bosses: Boss[] }) {
       {undoError && (
         <p className="status-text status-text--error">{undoError}</p>
       )}
+
+      {logError && <p className="status-text status-text--error">{logError}</p>}
 
       {duplicate && (
         <div className="row__confirm">

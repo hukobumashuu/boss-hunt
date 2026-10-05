@@ -42,3 +42,5 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 # Windows
 Thumbs.db
 desktop.ini
+
+.env.test

@@ -11,6 +11,8 @@ Express API backed by PostgreSQL and Drizzle, running on Bun.
 | `bun run lint`                    | Lint source files                                                     |
 | `bun run format:check`            | Check formatting                                                      |
 | `bun test`                        | Run unit tests and, when `DATABASE_URL` is set, API integration tests |
+| `bun run db:test:create`          | Create the `boss_tracker_test` database in Docker                     |
+| `bun run db:test:migrate`         | Apply migrations to the test database from `.env.test`                |
 | `bun run db:migrate`              | Apply pending migrations                                              |
 | `bun run db:seed`                 | Add missing static bosses                                             |
 | `bun run db:generate-tokens`      | Create missing logger tokens                                          |
@@ -24,6 +26,8 @@ Express API backed by PostgreSQL and Drizzle, running on Bun.
 | `ALLOWED_ORIGIN` | Browser origin permitted by CORS       |
 | `PORT`           | API port, default `4100`               |
 | `NODE_ENV`       | `development`, `test`, or `production` |
+
+`bun test` aborts if `DATABASE_URL` points at a database whose name does not contain `test`, because the integration tests delete all rows. Copy `.env.test.example` to `.env.test` to run them locally.
 
 All `/api/*` routes require a bearer token. `GET /health` is public for Render health checks. The API trusts one proxy hop, which is required for correct per-client rate limiting behind Render.
 

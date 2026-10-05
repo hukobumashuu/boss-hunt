@@ -26,10 +26,24 @@ bun run dev
 
 `db:seed` is idempotent. `db:generate-tokens` creates tokens for `p3anut`, `stasha`, `paupauu`, and `Guest`; rerunning it leaves existing logger tokens unchanged. Send bookmark links in the form `https://<frontend>/#token=<token>`. The fragment is not sent to the web server.
 
+## Tests
+
+Integration tests delete every row in the database they run against, so they refuse to start unless the database name contains `test`. They use a separate `boss_tracker_test` database:
+
+```bash
+cd server
+bun run db:test:create
+cp .env.test.example .env.test
+bun run db:test:migrate
+bun test
+```
+
+Without a `.env.test` file, `bun test` runs only the unit tests and skips the integration tests.
+
 ## Deployment
 
 1. Create a Neon database and set Render's `DATABASE_URL` to its direct connection URL.
-2. Create the Render web service from `render.yaml`, then set `ALLOWED_ORIGIN` to the final frontend origin. The free-plan build command installs dependencies and applies pending migrations.
+2. Create the Render web service from `render.yaml`, then set `ALLOWED_ORIGIN` to the final frontend origin. The free-plan build command installs dependencies and applies pending migrations, and `BUN_VERSION` in `render.yaml` pins the same Bun version CI uses.
 3. Run `bun run db:seed` once against Neon from a machine with `DATABASE_URL` configured.
 4. Run `bun run db:generate-tokens` once against Neon and share each generated fragment link privately.
 5. Deploy the client to Vercel or Cloudflare Pages with `VITE_API_URL` set to the Render API origin. Production builds fail when it is missing.

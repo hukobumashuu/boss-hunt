@@ -2,7 +2,18 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'bun:test';
 import { createHash } from 'node:crypto';
 import type { Server } from 'node:http';
 
-const integration = process.env.DATABASE_URL ? describe : describe.skip;
+const databaseUrl = process.env.DATABASE_URL;
+
+if (databaseUrl) {
+  const databaseName = new URL(databaseUrl).pathname.replace(/^\//, '');
+  if (!databaseName.toLowerCase().includes('test')) {
+    throw new Error(
+      `Refusing to run integration tests against database "${databaseName}": integration tests delete all rows. Use a database whose name contains "test" (see .env.test.example).`,
+    );
+  }
+}
+
+const integration = databaseUrl ? describe : describe.skip;
 
 integration('API integration', () => {
   let server: Server;
@@ -102,5 +113,20 @@ integration('API integration', () => {
 
     expect(first.status).toBe(201);
     expect(second.status).toBe(409);
+  });
+
+  it('returns 400 for a malformed JSON body', async () => {
+    await seed();
+    const response = await fetch(`${baseUrl}/api/kills`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: '{not json',
+    });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      success: false,
+      message: 'Invalid request body',
+    });
   });
 });

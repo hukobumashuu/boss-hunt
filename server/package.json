@@ -19,6 +19,8 @@
     "db:logs": "docker compose -f ../docker-compose.yaml logs -f postgres",
     "db:generate": "bun --bun drizzle-kit generate",
     "db:migrate": "bun --bun drizzle-kit migrate",
+    "db:test:create": "docker compose -f ../docker-compose.yaml exec postgres createdb -U boss_tracker boss_tracker_test",
+    "db:test:migrate": "bun --env-file=.env.test --bun drizzle-kit migrate",
     "db:seed": "bun src/db/seed.ts",
     "db:generate-tokens": "bun src/db/generate-tokens.ts",
     "db:rotate-token": "bun src/db/rotate-token.ts",

@@ -10,6 +10,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: BUN_VERSION
+        value: 1.4.1
       - key: DATABASE_URL
         sync: false
       - key: ALLOWED_ORIGIN

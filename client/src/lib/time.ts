@@ -25,8 +25,6 @@ const timeOfDayFormatter = new Intl.DateTimeFormat("en-PH", {
   hour12: true,
 });
 
-/** Exact H:M:S, matching the clock's own formatting - this is the
- * precision the plan set out to replace manual chat logging with. */
 export function formatTimeOfDay(iso: string): string {
   return timeOfDayFormatter.format(new Date(iso));
 }

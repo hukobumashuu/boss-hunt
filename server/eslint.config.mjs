@@ -8,7 +8,5 @@ export default tseslint.config(
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
-  // Must come last - turns off any ESLint stylistic rules that would
-  // otherwise fight with Prettier's formatting decisions.
   eslintConfigPrettier,
 );

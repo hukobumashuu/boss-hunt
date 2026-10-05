@@ -21,11 +21,6 @@ export class KillRepository {
     return boss ?? null;
   }
 
-  /** Most recent non-voided kill for this boss+channel, joined to the
-   * logger's name for the "not due yet" warning. No time lookback - the
-   * caller runs this through computeWindowState (the same math the
-   * tracker uses) to decide whether it's actually due, instead of a
-   * fixed cutoff that has no idea what "due" means. */
   async findLatestKill(
     bossId: number,
     channel: number,
@@ -59,8 +54,6 @@ export class KillRepository {
     return kill ?? null;
   }
 
-  /** Insert a kill. Server sets killedAt via DB default(now()); loggerId
-   * comes from the authenticated request, never from the request body. */
   async insertKill(input: {
     bossId: number;
     channel: number;
@@ -77,13 +70,6 @@ export class KillRepository {
     return inserted;
   }
 
-  /**
-   * Marks a kill voided instead of deleting it - the log stays literally
-   * append-only, this only adds a fact ("this entry doesn't count")
-   * on top of it, it never removes one. The `voidedAt IS NULL` guard
-   * makes double-voiding a no-op instead of clobbering the original
-   * void timestamp.
-   */
   async voidKillById(id: number, now: Date): Promise<KillEvent | null> {
     const [voided] = await this.db
       .update(killEvents)

@@ -15,17 +15,12 @@ import {
 export class KillController {
   constructor(private readonly service: KillService) {}
 
-  // req.body is typed as LogKillBody because validateBody(logKillBodySchema)
-  // runs before this handler. req.logger is set by requireApiToken, which
-  // also runs before this handler on every /api/* route.
   logKill = async (
     req: Request<Record<string, never>, unknown, LogKillBody>,
     res: Response,
     next: NextFunction,
   ): Promise<void> => {
     if (!req.logger) {
-      // Should be unreachable - requireApiToken runs before this handler
-      // on every /api/* route and would have already responded with 401.
       res.status(401).json(errorResponse('Not authenticated'));
       return;
     }
@@ -51,9 +46,6 @@ export class KillController {
     }
   };
 
-  // req.logger and req.params.id: same reasoning as logKill above, plus
-  // the route param. Express validates :id is present via the route
-  // pattern; the number-and-positive check is ours to make.
   voidKill = async (
     req: Request<{ id: string }>,
     res: Response,

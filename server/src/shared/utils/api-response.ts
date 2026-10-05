@@ -23,12 +23,6 @@ export function successResponse<T>(
   return { success: true, message, data };
 }
 
-/**
- * `data` is an intentional small extension: used for the duplicate-kill
- * 409, where the client needs the previous kill's details (who logged it,
- * when) to render the "log anyway?" prompt - that's not a field-validation
- * error, so it doesn't belong in `errors`.
- */
 export function errorResponse<T = undefined>(
   message: string,
   errors?: ApiFieldError[],

@@ -43,7 +43,6 @@ export function TrackerRow({ entry, now }: { entry: TrackerEntry; now: Date }) {
 
   return (
     <li className={`row row--${entry.status}`}>
-      {/* Status color only - never affects position in the list. */}
       <div className="row__status-dot" aria-hidden="true" />
       <div className="row__main">
         <div className="row__title">

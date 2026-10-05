@@ -1,5 +1,5 @@
-import type { Boss } from '../lib/types';
-import { getBossLetter } from '../lib/bossShorthand';
+import type { Boss } from "../lib/types";
+import { getBossLetter } from "../lib/bossShorthand";
 
 export function FilterChips({
   bosses,
@@ -19,7 +19,7 @@ export function FilterChips({
             key={boss.id}
             type="button"
             aria-pressed={isActive}
-            className={`chip ${isActive ? 'chip--active' : ''}`}
+            className={`chip ${isActive ? "chip--active" : ""}`}
             onClick={() => onToggle(boss.id)}
           >
             {getBossLetter(boss.name)} · {boss.name}

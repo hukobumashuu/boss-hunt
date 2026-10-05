@@ -9,16 +9,6 @@ function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
-/**
- * Requires `Authorization: Bearer <token>`. On success, attaches
- * `req.logger` so downstream handlers never need to trust a
- * client-supplied name again - identity comes from the credential.
- *
- * Deliberately no expiry: for a closed 4-person group, the real failure
- * mode is a leaked token, and the fix for that is revoking the one row
- * in `loggers` that matches it (see db/generate-token.ts), not a timer
- * that also logs out someone who's actively hunting.
- */
 export async function requireApiToken(
   req: Request,
   res: Response,

@@ -21,7 +21,7 @@ export function useBosses() {
   return useQuery({
     queryKey: ["bosses"],
     queryFn: fetchBosses,
-    staleTime: Infinity, // static reference data, ~5 rows, rarely changes
+    staleTime: Infinity,
   });
 }
 

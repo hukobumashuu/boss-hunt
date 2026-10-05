@@ -7,16 +7,10 @@ import type {
   TrackerEntry,
 } from "./types";
 
-const configuredBaseUrl = import.meta.env.VITE_API_URL;
+const BASE_URL = (
+  import.meta.env.VITE_API_URL ?? "http://localhost:4100"
+).replace(/\/$/, "");
 
-if (import.meta.env.PROD && !configuredBaseUrl) {
-  throw new Error("VITE_API_URL is required for production builds");
-}
-
-const BASE_URL = (configuredBaseUrl ?? "http://localhost:4100").replace(
-  /\/$/,
-  "",
-);
 export class ApiError<T = undefined> extends Error {
   constructor(
     public readonly status: number,

@@ -1,4 +1,5 @@
 import express from 'express';
+import type { RequestHandler } from 'express';
 import cors from 'cors';
 import { killRoutes } from './features/kills/kills.routes';
 import { trackerRoutes } from './features/tracker/tracker.routes';
@@ -11,7 +12,11 @@ import { errorHandler } from './shared/middlewares/error-handler';
 import { successResponse } from './shared/utils/api-response';
 import { env } from './config/env';
 
-export function createApp() {
+export interface AppOptions {
+  rateLimiter?: RequestHandler;
+}
+
+export function createApp(options: AppOptions = {}) {
   const app = express();
   app.set('trust proxy', 1);
   app.use(cors({ origin: env.ALLOWED_ORIGIN }));
@@ -21,7 +26,7 @@ export function createApp() {
     res.status(200).json(successResponse({ status: 'ok' }));
   });
 
-  app.use('/api', apiRateLimiter, requireApiToken);
+  app.use('/api', options.rateLimiter ?? apiRateLimiter, requireApiToken);
 
   app.use(killRoutes);
   app.use(trackerRoutes);

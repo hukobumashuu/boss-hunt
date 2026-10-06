@@ -43,7 +43,7 @@ Without a `.env.test` file, `bun test` runs only the unit tests and skips the in
 ## Deployment
 
 1. Create a Neon database and set Render's `DATABASE_URL` to its direct connection URL.
-2. Create the Render web service from `render.yaml`, then set `ALLOWED_ORIGIN` to the final frontend origin. The free-plan build command installs dependencies and applies pending migrations, and `BUN_VERSION` in `render.yaml` pins the same Bun version CI uses.
+2. Create the Render web service from `render.yaml`, then set `ALLOWED_ORIGIN` to the final frontend origin. The free-plan build command installs dependencies and applies pending migrations, `BUN_VERSION` in `render.yaml` pins the same Bun version CI uses, and `autoDeployTrigger: checksPass` makes Render deploy a commit only after its GitHub Actions checks pass.
 3. Run `bun run db:seed` once against Neon from a machine with `DATABASE_URL` configured.
 4. Run `bun run db:generate-tokens` once against Neon and share each generated fragment link privately.
 5. Deploy the client to Vercel or Cloudflare Pages with `VITE_API_URL` set to the Render API origin. Production builds fail when it is missing.

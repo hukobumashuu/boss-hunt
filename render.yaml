@@ -7,6 +7,7 @@ services:
     startCommand: bun src/server.ts
     healthCheckPath: /health
     plan: free
+    autoDeployTrigger: checksPass
     envVars:
       - key: NODE_ENV
         value: production

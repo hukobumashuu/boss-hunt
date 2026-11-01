@@ -28,6 +28,12 @@ export function errorHandler(
   _next: NextFunction,
 ): void {
   void _next;
+  // The request may already have been answered (for example by the timeout
+  // middleware) before this error surfaced. Log it, but never write again.
+  if (res.headersSent) {
+    console.error('[late-error] error after response was sent:', err);
+    return;
+  }
   const status = clientErrorStatus(err);
   if (status !== undefined) {
     res

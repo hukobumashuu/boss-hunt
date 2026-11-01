@@ -59,6 +59,26 @@ describe('errorHandler', () => {
     expect(consoleError).toHaveBeenCalledTimes(1);
   });
 
+  it('logs but never writes when the response was already sent', () => {
+    let wrote = false;
+    const res = {
+      headersSent: true,
+      status() {
+        wrote = true;
+        return this;
+      },
+      json() {
+        wrote = true;
+        return this;
+      },
+    } as unknown as Response;
+
+    errorHandler(new Error('late'), {} as Request, res, () => {});
+
+    expect(wrote).toBe(false);
+    expect(consoleError).toHaveBeenCalledTimes(1);
+  });
+
   it('does not trust a status without expose', () => {
     const { statusCode } = run(Object.assign(new Error('x'), { status: 400 }));
 

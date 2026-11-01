@@ -1,12 +1,18 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { Boss } from "../lib/types";
 import { ApiError } from "../lib/api";
+import { getErrorMessage } from "../lib/errors";
+import { reuseOrCreateKillIntent } from "../lib/killIntent";
+import type { KillIntent } from "../lib/killIntent";
 import { useLogKill, useVoidKill } from "../lib/queries";
 import { getBossLetter } from "../lib/bossShorthand";
+import { formatTimeOfDay } from "../lib/time";
 
 interface PendingDuplicate {
   channel: number;
   message: string;
+  /** When the user first tapped; this is the time the kill will be logged at. */
+  tappedAt: number;
 }
 
 const UNDO_VISIBLE_MS = 8_000;
@@ -27,13 +33,24 @@ export function LogKillForm({ bosses }: { bosses: Boss[] }) {
   const [logError, setLogError] = useState<string | null>(null);
   const logKill = useLogKill();
   const voidKill = useVoidKill();
+  // The current tap, kept until it succeeds or is cancelled, so confirming a
+  // warning or retrying a failure still logs the time of the original tap.
+  const intentRef = useRef<KillIntent | null>(null);
 
   function handleChannelTap(channel: number, force: boolean) {
     if (!selectedBoss) return;
+    const intent = reuseOrCreateKillIntent(
+      intentRef.current,
+      selectedBoss.id,
+      channel,
+    );
+    intentRef.current = intent;
+
     logKill.mutate(
-      { bossId: selectedBoss.id, channel, force },
+      { intent, force },
       {
         onSuccess: (result) => {
+          intentRef.current = null;
           setDuplicate(null);
           setLogError(null);
           setUndoError(null);
@@ -49,14 +66,15 @@ export function LogKillForm({ bosses }: { bosses: Boss[] }) {
         },
         onError: (err) => {
           if (err instanceof ApiError && err.status === 409) {
-            setDuplicate({ channel, message: err.message });
+            setDuplicate({
+              channel,
+              message: err.message,
+              tappedAt: intent.tappedAt,
+            });
             return;
           }
-          setLogError(
-            err instanceof ApiError
-              ? err.message
-              : "Couldn't log that kill. Check your connection and try again.",
-          );
+          setDuplicate(null);
+          setLogError(getErrorMessage(err, "Couldn't log that kill."));
         },
       },
     );
@@ -108,6 +126,7 @@ export function LogKillForm({ bosses }: { bosses: Boss[] }) {
           type="button"
           className="button button--ghost"
           onClick={() => {
+            intentRef.current = null;
             setSelectedBoss(null);
             setDuplicate(null);
           }}
@@ -135,6 +154,14 @@ export function LogKillForm({ bosses }: { bosses: Boss[] }) {
         ))}
       </div>
 
+      {logKill.isPending && (
+        <p className="status-text status-text--compact">
+          {logKill.failureCount > 0
+            ? "The server is slow to respond. Retrying..."
+            : "Logging..."}
+        </p>
+      )}
+
       {undoable && (
         <div className="row__confirm">
           <span>Logged Ch {undoable.channel}.</span>
@@ -160,11 +187,17 @@ export function LogKillForm({ bosses }: { bosses: Boss[] }) {
       {duplicate && (
         <div className="row__confirm">
           <span>{duplicate.message}</span>
+          <span className="row__confirm-note">
+            {`It will be logged as killed at ${formatTimeOfDay(new Date(duplicate.tappedAt).toISOString())}.`}
+          </span>
           <div className="row__confirm-actions">
             <button
               type="button"
               className="button button--ghost"
-              onClick={() => setDuplicate(null)}
+              onClick={() => {
+                intentRef.current = null;
+                setDuplicate(null);
+              }}
             >
               Cancel
             </button>

@@ -38,6 +38,12 @@ export interface Boss {
   respawnIntervalHours: number;
 }
 
+export interface LoggedKill {
+  id: number;
+  loggedByName: string;
+  killedAt: string;
+}
+
 export interface DuplicateKillWarning {
   lastLoggedBy: string;
   lastKilledAt: string;

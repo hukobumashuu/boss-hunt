@@ -1,3 +1,5 @@
+import { clearCachedTracker } from "./trackerCache";
+
 const STORAGE_KEY = "boss-tracker-token";
 
 export function bootstrapToken(): string | null {
@@ -17,6 +19,8 @@ export function bootstrapToken(): string | null {
 
 export function clearToken(): void {
   localStorage.removeItem(STORAGE_KEY);
+  // Don't keep showing tracker data once access has been revoked.
+  clearCachedTracker();
 }
 
 export function getToken(): string | null {

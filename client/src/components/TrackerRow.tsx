@@ -1,11 +1,16 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { TrackerEntry } from "../lib/types";
 import { ApiError } from "../lib/api";
+import { getErrorMessage } from "../lib/errors";
+import { reuseOrCreateKillIntent } from "../lib/killIntent";
+import type { KillIntent } from "../lib/killIntent";
 import { useLogKill } from "../lib/queries";
 import { formatCountdown, formatTimeOfDay } from "../lib/time";
 
 interface DuplicateInfo {
   message: string;
+  /** When the user first tapped; this is the time the kill will be logged at. */
+  tappedAt: number;
 }
 
 const STATUS_LABEL: Record<TrackerEntry["status"], string> = {
@@ -17,6 +22,10 @@ const STATUS_LABEL: Record<TrackerEntry["status"], string> = {
 export function TrackerRow({ entry, now }: { entry: TrackerEntry; now: Date }) {
   const logKill = useLogKill();
   const [duplicate, setDuplicate] = useState<DuplicateInfo | null>(null);
+  const [logError, setLogError] = useState<string | null>(null);
+  // The current tap, kept until it succeeds or is cancelled, so confirming a
+  // warning or retrying a failure still logs the time of the original tap.
+  const intentRef = useRef<KillIntent | null>(null);
 
   const nextCheckLabel =
     entry.status === "open"
@@ -28,17 +37,36 @@ export function TrackerRow({ entry, now }: { entry: TrackerEntry; now: Date }) {
     entry.windowsElapsed > 0 ? `Missed ${entry.windowsElapsed}x` : null;
 
   function handleLog(force: boolean) {
+    const intent = reuseOrCreateKillIntent(
+      intentRef.current,
+      entry.bossId,
+      entry.channel,
+    );
+    intentRef.current = intent;
+    setLogError(null);
+
     logKill.mutate(
-      { bossId: entry.bossId, channel: entry.channel, force },
+      { intent, force },
       {
-        onSuccess: () => setDuplicate(null),
+        onSuccess: () => {
+          intentRef.current = null;
+          setDuplicate(null);
+        },
         onError: (err) => {
           if (err instanceof ApiError && err.status === 409) {
-            setDuplicate({ message: err.message });
+            setDuplicate({ message: err.message, tappedAt: intent.tappedAt });
+            return;
           }
+          setDuplicate(null);
+          setLogError(getErrorMessage(err, "Couldn't log that kill."));
         },
       },
     );
+  }
+
+  function handleCancel() {
+    intentRef.current = null;
+    setDuplicate(null);
   }
 
   return (
@@ -68,11 +96,14 @@ export function TrackerRow({ entry, now }: { entry: TrackerEntry; now: Date }) {
         {duplicate && (
           <div className="row__confirm">
             <span>{duplicate.message}</span>
+            <span className="row__confirm-note">
+              {`It will be logged as killed at ${formatTimeOfDay(new Date(duplicate.tappedAt).toISOString())}.`}
+            </span>
             <div className="row__confirm-actions">
               <button
                 type="button"
                 className="button button--ghost"
-                onClick={() => setDuplicate(null)}
+                onClick={handleCancel}
               >
                 Cancel
               </button>
@@ -86,6 +117,19 @@ export function TrackerRow({ entry, now }: { entry: TrackerEntry; now: Date }) {
             </div>
           </div>
         )}
+        {logError && (
+          <div className="row__error" role="alert">
+            <span>{logError}</span>
+            <button
+              type="button"
+              className="button button--ghost"
+              onClick={() => handleLog(false)}
+              disabled={logKill.isPending}
+            >
+              Retry
+            </button>
+          </div>
+        )}
       </div>
       <button
         type="button"
@@ -93,7 +137,11 @@ export function TrackerRow({ entry, now }: { entry: TrackerEntry; now: Date }) {
         onClick={() => handleLog(false)}
         disabled={logKill.isPending}
       >
-        {logKill.isPending ? "Logging…" : "Log kill"}
+        {logKill.isPending
+          ? logKill.failureCount > 0
+            ? "Retrying…"
+            : "Logging…"
+          : "Log kill"}
       </button>
     </li>
   );

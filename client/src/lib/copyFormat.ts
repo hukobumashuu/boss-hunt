@@ -2,7 +2,11 @@ import type { TrackerEntry } from "./types";
 import { getBossLetter } from "./bossShorthand";
 import { formatTimeOfDay } from "./time";
 
-export function formatCopyText(entries: TrackerEntry[], now: Date): string {
+/** `syncedAt` must be when the data was last fetched, not the current time. */
+export function formatCopyText(
+  entries: TrackerEntry[],
+  syncedAt: Date,
+): string {
   const lines = entries
     .filter((entry) => !entry.isStale)
     .map((entry) => {
@@ -24,6 +28,6 @@ export function formatCopyText(entries: TrackerEntry[], now: Date): string {
       return `${letter} ${entry.channel} ${time}${suffix}`;
     });
 
-  const header = `Boss Tracker - synced ${formatTimeOfDay(now.toISOString())}`;
+  const header = `Boss Tracker - synced ${formatTimeOfDay(syncedAt.toISOString())}`;
   return [header, ...lines].join("\n");
 }

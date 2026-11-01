@@ -1,9 +1,12 @@
 import { getToken } from "./auth";
+import { ApiError } from "./errors";
+import { withTimeout } from "./withTimeout";
 import type {
   ApiErrorBody,
   Boss,
   CoverageEntry,
   DuplicateKillWarning,
+  LoggedKill,
   TrackerEntry,
 } from "./types";
 
@@ -11,45 +14,45 @@ const BASE_URL = (
   import.meta.env.VITE_API_URL ?? "http://localhost:4100"
 ).replace(/\/$/, "");
 
-export class ApiError<T = undefined> extends Error {
-  constructor(
-    public readonly status: number,
-    message: string,
-    public readonly data?: T,
-  ) {
-    super(message);
-    this.name = "ApiError";
-  }
-}
+// Existing components import ApiError from here.
+export { ApiError };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getToken();
-  const res = await fetch(`${BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...init?.headers,
-    },
-  });
 
-  const responseText = await res.text();
+  // Only network I/O runs under the deadline; parsing happens afterwards.
+  const { ok, status, text } = await withTimeout(
+    async (signal) => {
+      const res = await fetch(`${BASE_URL}${path}`, {
+        ...init,
+        signal,
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...init?.headers,
+        },
+      });
+      return { ok: res.ok, status: res.status, text: await res.text() };
+    },
+    { signal: init?.signal ?? undefined },
+  );
+
   let body: { success: true; message: string; data: T } | ApiErrorBody<unknown>;
 
   try {
-    body = JSON.parse(responseText) as
+    body = JSON.parse(text) as
       { success: true; message: string; data: T } | ApiErrorBody<unknown>;
   } catch {
     throw new ApiError(
-      res.status,
-      res.ok
+      status,
+      ok
         ? "The server returned an invalid response."
-        : `Request failed (${res.status}).`,
+        : `Request failed (${status}).`,
     );
   }
 
-  if (!res.ok || !body.success) {
-    throw new ApiError(res.status, body.message, body.data);
+  if (!ok || !body.success) {
+    throw new ApiError(status, body.message, body.data);
   }
   return body.data;
 }
@@ -62,12 +65,18 @@ export function fetchBosses(): Promise<Boss[]> {
   return request<Boss[]>("/api/bosses");
 }
 
-export function logKill(input: {
+export interface LogKillInput {
   bossId: number;
   channel: number;
-  force?: boolean;
-}) {
-  return request<{ id: number; loggedByName: string }>("/api/kills", {
+  force: boolean;
+  /** Idempotency key: the same key never logs two kills. */
+  requestId: string;
+  /** How long ago the user tapped, so a delayed request keeps the real time. */
+  killedAgoMs: number;
+}
+
+export function logKill(input: LogKillInput) {
+  return request<LoggedKill>("/api/kills", {
     method: "POST",
     body: JSON.stringify(input),
   });

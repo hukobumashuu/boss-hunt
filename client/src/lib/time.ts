@@ -16,6 +16,16 @@ export function formatElapsedSince(targetIso: string, now: Date): string {
   return formatDuration(Math.round(diffMs / 60_000));
 }
 
+/** "just now", "42s ago", "5m ago", "2h 10m ago". */
+export function formatAge(ms: number): string {
+  const seconds = Math.max(0, Math.round(ms / 1000));
+  if (seconds < 5) return "just now";
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m ago`;
+}
+
 const TIME_ZONE = "Asia/Manila";
 const timeOfDayFormatter = new Intl.DateTimeFormat("en-PH", {
   timeZone: TIME_ZONE,

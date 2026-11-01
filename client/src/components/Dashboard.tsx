@@ -5,6 +5,7 @@ import { FilterChips } from "./FilterChips";
 import { LogKillForm } from "./LogKillForm";
 import { TrackerRow } from "./TrackerRow";
 import { NoAccess } from "./NoAccess";
+import { SyncStatus } from "./SyncStatus";
 import { useBosses, useLogMaintenanceReset, useTracker } from "../lib/queries";
 import { ApiError, fetchCoverage } from "../lib/api";
 import { clearToken } from "../lib/auth";
@@ -15,7 +16,15 @@ const TICK_MS = 30_000;
 const COPIED_MESSAGE_MS = 2000;
 
 export function Dashboard() {
-  const { data, error, isLoading } = useTracker();
+  const {
+    data,
+    error,
+    isError,
+    isFetching,
+    failureCount,
+    dataUpdatedAt,
+    refetch,
+  } = useTracker();
   const { data: bosses } = useBosses();
   const [selectedBossIds, setSelectedBossIds] = useState<Set<number>>(
     new Set(),
@@ -53,7 +62,8 @@ export function Dashboard() {
   }
 
   async function handleCopy() {
-    const text = formatCopyText(active, now);
+    // The header must say when the data was fetched, not what time it is now.
+    const text = formatCopyText(active, new Date(dataUpdatedAt));
     await navigator.clipboard.writeText(text);
     setCopied(true);
     window.setTimeout(() => setCopied(false), COPIED_MESSAGE_MS);
@@ -94,6 +104,16 @@ export function Dashboard() {
   return (
     <div className="dashboard">
       <Clock />
+
+      <SyncStatus
+        hasData={data !== undefined}
+        isFetching={isFetching}
+        isError={isError}
+        failureCount={failureCount}
+        dataUpdatedAt={dataUpdatedAt}
+        now={now}
+        onRetry={() => void refetch()}
+      />
 
       <button
         type="button"
@@ -163,15 +183,13 @@ export function Dashboard() {
         </ul>
       )}
 
-      {isLoading && <p className="status-text">Loading tracker...</p>}
-
-      {!isLoading && data && data.length === 0 && (
+      {data && data.length === 0 && (
         <p className="status-text">
           No kills logged yet. Log the first one above to start tracking.
         </p>
       )}
 
-      {!isLoading && data && data.length > 0 && bosses && (
+      {data && data.length > 0 && bosses && (
         <>
           <FilterChips
             bosses={bosses}
@@ -211,12 +229,6 @@ export function Dashboard() {
             </>
           )}
         </>
-      )}
-
-      {error && !(error instanceof ApiError && error.status === 401) && (
-        <p className="status-text status-text--error">
-          Couldn't reach the server. Check your connection and try again.
-        </p>
       )}
     </div>
   );

@@ -29,6 +29,13 @@
       "when": 1791030840223,
       "tag": "0003_fancy_selene",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793501908806,
+      "tag": "0004_brave_terrax",
+      "breakpoints": true
     }
   ]
 }

@@ -117,10 +117,11 @@ integration('API integration', () => {
     channel: number,
     loggerId: number,
     killedAt: Date,
+    createdAt: Date = killedAt,
   ) {
     const [kill] = await db
       .insert(schema.killEvents)
-      .values({ bossId, channel, loggerId, killedAt })
+      .values({ bossId, channel, loggerId, killedAt, createdAt })
       .returning();
     if (!kill) throw new Error('Failed to insert kill');
     return kill;
@@ -151,6 +152,18 @@ integration('API integration', () => {
 
       expect(status).toBe(200);
       expect(body.success).toBe(true);
+    });
+
+    it('serves /health/db without a token and reports database latency', async () => {
+      const { status, body } = await call('GET', '/health/db', {
+        token: null,
+      });
+
+      expect(status).toBe(200);
+      expect(body.data).toMatchObject({ status: 'ok' });
+      expect(typeof (body.data as { dbLatencyMs: unknown }).dbLatencyMs).toBe(
+        'number',
+      );
     });
 
     it('rejects an API request without an Authorization header', async () => {
@@ -288,6 +301,175 @@ integration('API integration', () => {
         expect(response.body.message).toBe('Validation failed');
         expect(response.body.errors?.length).toBeGreaterThan(0);
       }
+    });
+
+    describe('kill time and idempotency', () => {
+      interface LoggedKillBody {
+        id: number;
+        killedAt: string;
+        requestId: string | null;
+      }
+
+      const REQUEST_ID = '3f0c4d2e-7a55-4c1e-9b0a-5d8f6a1e2c10';
+
+      function logged(response: { body: ApiBody }): LoggedKillBody {
+        return response.body.data as LoggedKillBody;
+      }
+
+      it('records the kill time the client reports, not the arrival time', async () => {
+        const { boss } = await seed();
+        const before = Date.now();
+        const response = await call('POST', '/api/kills', {
+          body: { bossId: boss.id, channel: 4, killedAgoMs: 5 * MINUTE_MS },
+        });
+        const after = Date.now();
+
+        const killedAt = new Date(logged(response).killedAt).getTime();
+        expect(response.status).toBe(201);
+        expect(killedAt).toBeGreaterThanOrEqual(before - 5 * MINUTE_MS);
+        expect(killedAt).toBeLessThanOrEqual(after - 5 * MINUTE_MS);
+      });
+
+      it('keeps the tapped time when a duplicate warning is confirmed later', async () => {
+        const { boss, owner } = await seed();
+        await insertKill(
+          boss.id,
+          4,
+          owner.id,
+          new Date(Date.now() - MINUTE_MS),
+        );
+
+        const warned = await call('POST', '/api/kills', {
+          body: { bossId: boss.id, channel: 4 },
+        });
+        const before = Date.now();
+        const confirmed = await call('POST', '/api/kills', {
+          body: {
+            bossId: boss.id,
+            channel: 4,
+            force: true,
+            killedAgoMs: 2 * MINUTE_MS,
+          },
+        });
+
+        expect(warned.status).toBe(409);
+        expect(confirmed.status).toBe(201);
+        const killedAt = new Date(logged(confirmed).killedAt).getTime();
+        expect(Math.abs(killedAt - (before - 2 * MINUTE_MS))).toBeLessThan(
+          5_000,
+        );
+      });
+
+      it('rejects ages that are negative, fractional or beyond the maximum', async () => {
+        const { boss } = await seed();
+        const invalid: unknown[] = [
+          { bossId: boss.id, channel: 4, killedAgoMs: -1 },
+          { bossId: boss.id, channel: 4, killedAgoMs: 1.5 },
+          { bossId: boss.id, channel: 4, killedAgoMs: 31 * MINUTE_MS },
+          { bossId: boss.id, channel: 4, killedAgoMs: '5000' },
+          { bossId: boss.id, channel: 4, requestId: 'not-a-uuid' },
+        ];
+
+        for (const body of invalid) {
+          const response = await call('POST', '/api/kills', { body });
+          expect(response.status).toBe(400);
+          expect(response.body.message).toBe('Validation failed');
+        }
+      });
+
+      it('accepts the maximum age exactly', async () => {
+        const { boss } = await seed();
+        const response = await call('POST', '/api/kills', {
+          body: { bossId: boss.id, channel: 4, killedAgoMs: 30 * MINUTE_MS },
+        });
+
+        expect(response.status).toBe(201);
+      });
+
+      it('treats a retry with the same requestId as the same kill', async () => {
+        const { boss } = await seed();
+        const body = { bossId: boss.id, channel: 4, requestId: REQUEST_ID };
+
+        const first = await call('POST', '/api/kills', { body });
+        const retry = await call('POST', '/api/kills', { body });
+        const rows = await db.select().from(schema.killEvents);
+
+        expect(first.status).toBe(201);
+        expect(retry.status).toBe(201);
+        expect(logged(retry).id).toBe(logged(first).id);
+        expect(rows).toHaveLength(1);
+      });
+
+      it('does not warn about a duplicate when the retry is its own earlier attempt', async () => {
+        const { boss } = await seed();
+        const body = { bossId: boss.id, channel: 4, requestId: REQUEST_ID };
+
+        await call('POST', '/api/kills', { body });
+        const retry = await call('POST', '/api/kills', { body });
+        const withoutKey = await call('POST', '/api/kills', {
+          body: { bossId: boss.id, channel: 4 },
+        });
+
+        expect(retry.status).toBe(201);
+        expect(withoutKey.status).toBe(409);
+      });
+
+      it('handles concurrent requests with the same requestId as one kill', async () => {
+        const { boss } = await seed();
+        const body = { bossId: boss.id, channel: 4, requestId: REQUEST_ID };
+
+        const results = await Promise.all(
+          Array.from({ length: 5 }, () => call('POST', '/api/kills', { body })),
+        );
+        const rows = await db.select().from(schema.killEvents);
+
+        const storedId = rows[0]?.id ?? -1;
+        expect(rows).toHaveLength(1);
+        for (const result of results) {
+          expect(result.status).toBe(201);
+          expect(logged(result).id).toBe(storedId);
+        }
+      });
+
+      it('scopes a requestId to the logger that sent it', async () => {
+        const { boss } = await seed();
+        await seedOtherLogger();
+
+        const mine = await call('POST', '/api/kills', {
+          body: { bossId: boss.id, channel: 4, requestId: REQUEST_ID },
+        });
+        const theirs = await call('POST', '/api/kills', {
+          token: OTHER_TOKEN,
+          body: { bossId: boss.id, channel: 5, requestId: REQUEST_ID },
+        });
+
+        expect(mine.status).toBe(201);
+        expect(theirs.status).toBe(201);
+        expect(logged(theirs).id).not.toBe(logged(mine).id);
+      });
+
+      it('stores when the server received the log, separate from the kill time', async () => {
+        const { boss } = await seed();
+        await call('POST', '/api/kills', {
+          body: { bossId: boss.id, channel: 4, killedAgoMs: 10 * MINUTE_MS },
+        });
+        const [row] = await db.select().from(schema.killEvents);
+
+        const gap =
+          (row?.createdAt.getTime() ?? 0) - (row?.killedAt.getTime() ?? 0);
+        expect(Math.abs(gap - 10 * MINUTE_MS)).toBeLessThan(5_000);
+      });
+
+      it('lets the logger undo a back-dated kill (void window runs from receipt)', async () => {
+        const { boss } = await seed();
+        const log = await call('POST', '/api/kills', {
+          body: { bossId: boss.id, channel: 4, killedAgoMs: 20 * MINUTE_MS },
+        });
+
+        const voided = await call('POST', `/api/kills/${logged(log).id}/void`);
+
+        expect(voided.status).toBe(200);
+      });
     });
 
     it('allows a new kill right after a reset moved the baseline', async () => {

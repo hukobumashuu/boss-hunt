@@ -44,48 +44,35 @@ export class KillService {
     logger: AuthenticatedLogger,
     now: Date = new Date(),
   ): Promise<LoggedKill> {
+    // A retried request whose first attempt actually reached the database must
+    // return that kill, not trip the duplicate guard against its own row.
+    const replay = await this.findReplay(input, logger);
+    if (replay) return replay;
+
     const boss = await this.repo.findBossById(input.bossId);
     if (!boss) {
       throw new NotFoundError(`Boss ${input.bossId} does not exist`);
     }
 
+    // The moment the kill happened, not the moment this request arrived.
+    const killedAt = new Date(now.getTime() - (input.killedAgoMs ?? 0));
+
     if (!input.force) {
-      const latest = await this.repo.findLatestKill(
-        input.bossId,
-        input.channel,
-      );
-      if (latest) {
-        const latestReset = await this.resetRepo.findLatest();
-        const baseline = effectiveLastKilledAt(
-          latest.killedAt,
+      try {
+        await this.assertNotDuplicate(
+          input,
           boss.respawnIntervalHours,
-          latestReset?.resetAt ?? null,
+          killedAt,
         );
-        const window = computeWindowState(
-          baseline,
-          boss.respawnIntervalHours,
-          now,
-        );
-        const firstBoundaryAt = new Date(
-          baseline.getTime() + boss.respawnIntervalHours * 60 * 60 * 1000,
-        );
-        if (now < firstBoundaryAt) {
-          throw new DuplicateKillWarning(
-            `${latest.loggerName} already logged Ch ${input.channel} - ` +
-              `not due until ${formatTime(window.nextWindowAt)}. Log anyway?`,
-            latest.loggerName,
-            latest.killedAt,
-          );
+      } catch (err) {
+        // A retry can overlap its own original: by the time this guard runs
+        // the original may have just stored the kill, which would look like
+        // someone else's duplicate. The same key means the same kill.
+        if (err instanceof DuplicateKillWarning) {
+          const raced = await this.findReplay(input, logger);
+          if (raced) return raced;
         }
-        if (window.windowsElapsed >= STALE_MISSED_THRESHOLD) {
-          throw new DuplicateKillWarning(
-            `Ch ${input.channel} hasn't been confirmed in ` +
-              `${window.windowsElapsed} cycles - might not be ours ` +
-              `anymore. Log anyway?`,
-            latest.loggerName,
-            latest.killedAt,
-          );
-        }
+        throw err;
       }
     }
 
@@ -93,9 +80,60 @@ export class KillService {
       bossId: input.bossId,
       channel: input.channel,
       loggerId: logger.id,
+      killedAt,
+      ...(input.requestId !== undefined ? { requestId: input.requestId } : {}),
     });
 
     return { ...inserted, loggedByName: logger.name };
+  }
+
+  private async findReplay(
+    input: LogKillBody,
+    logger: AuthenticatedLogger,
+  ): Promise<LoggedKill | null> {
+    if (input.requestId === undefined) return null;
+    const existing = await this.repo.findKillByRequestId(
+      logger.id,
+      input.requestId,
+    );
+    return existing ? { ...existing, loggedByName: logger.name } : null;
+  }
+
+  private async assertNotDuplicate(
+    input: LogKillBody,
+    respawnIntervalHours: number,
+    killedAt: Date,
+  ): Promise<void> {
+    const latest = await this.repo.findLatestKill(input.bossId, input.channel);
+    if (!latest) return;
+
+    const latestReset = await this.resetRepo.findLatest();
+    const baseline = effectiveLastKilledAt(
+      latest.killedAt,
+      respawnIntervalHours,
+      latestReset?.resetAt ?? null,
+    );
+    const window = computeWindowState(baseline, respawnIntervalHours, killedAt);
+    const firstBoundaryAt = new Date(
+      baseline.getTime() + respawnIntervalHours * 60 * 60 * 1000,
+    );
+    if (killedAt < firstBoundaryAt) {
+      throw new DuplicateKillWarning(
+        `${latest.loggerName} already logged Ch ${input.channel} - ` +
+          `not due until ${formatTime(window.nextWindowAt)}. Log anyway?`,
+        latest.loggerName,
+        latest.killedAt,
+      );
+    }
+    if (window.windowsElapsed >= STALE_MISSED_THRESHOLD) {
+      throw new DuplicateKillWarning(
+        `Ch ${input.channel} hasn't been confirmed in ` +
+          `${window.windowsElapsed} cycles - might not be ours ` +
+          `anymore. Log anyway?`,
+        latest.loggerName,
+        latest.killedAt,
+      );
+    }
   }
 
   async voidKill(
@@ -112,7 +150,9 @@ export class KillService {
       throw new ForbiddenError('You can only void a kill you logged yourself');
     }
 
-    const ageMs = now.getTime() - kill.killedAt.getTime();
+    // Measured from when the log was received, not from the (possibly
+    // back-dated) kill time, so undoing a late-confirmed kill still works.
+    const ageMs = now.getTime() - kill.createdAt.getTime();
     if (ageMs > VOID_WINDOW_MS) {
       throw new VoidNotAllowedError('This was logged too long ago to void');
     }

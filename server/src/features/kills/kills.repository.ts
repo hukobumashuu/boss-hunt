@@ -54,20 +54,58 @@ export class KillRepository {
     return kill ?? null;
   }
 
+  async findKillByRequestId(
+    loggerId: number,
+    requestId: string,
+  ): Promise<KillEvent | null> {
+    const [kill] = await this.db
+      .select()
+      .from(killEvents)
+      .where(
+        and(
+          eq(killEvents.loggerId, loggerId),
+          eq(killEvents.requestId, requestId),
+        ),
+      )
+      .limit(1);
+    return kill ?? null;
+  }
+
+  /**
+   * Inserts a kill. When a requestId is supplied the insert is idempotent: if
+   * this logger already stored a kill under that key (including a concurrent
+   * duplicate request racing this one), the existing row is returned instead
+   * of creating a second kill.
+   */
   async insertKill(input: {
     bossId: number;
     channel: number;
     loggerId: number;
+    killedAt: Date;
+    requestId?: string;
   }): Promise<KillEvent> {
     const [inserted] = await this.db
       .insert(killEvents)
       .values(input)
+      .onConflictDoNothing({
+        target: [killEvents.loggerId, killEvents.requestId],
+      })
       .returning();
 
-    if (!inserted) {
-      throw new Error('Insert did not return a row');
+    if (inserted) {
+      return inserted;
     }
-    return inserted;
+
+    if (input.requestId !== undefined) {
+      const existing = await this.findKillByRequestId(
+        input.loggerId,
+        input.requestId,
+      );
+      if (existing) {
+        return existing;
+      }
+    }
+    throw new Error('Insert did not return a row');
   }
 
   async voidKillById(id: number, now: Date): Promise<KillEvent | null> {

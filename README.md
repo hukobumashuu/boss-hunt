@@ -40,6 +40,13 @@ bun test
 
 Without a `.env.test` file, `bun test` runs only the unit tests and skips the integration tests.
 
+The client has unit tests for its networking, retry and caching logic:
+
+```bash
+cd client
+bun test
+```
+
 ## Deployment
 
 1. Create a Neon database and set Render's `DATABASE_URL` to its direct connection URL.
@@ -53,4 +60,4 @@ The API needs `DATABASE_URL` and `ALLOWED_ORIGIN`. The client needs `VITE_API_UR
 
 ## Verification
 
-GitHub Actions runs server type checks, linting, formatting, migrations, unit tests, PostgreSQL integration tests, and a client build on pushes and pull requests.
+GitHub Actions runs server type checks, linting, formatting, migrations, unit tests, PostgreSQL integration tests, client unit tests, and a client build on pushes and pull requests.

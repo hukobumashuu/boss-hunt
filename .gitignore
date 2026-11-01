@@ -19,3 +19,6 @@ dist/
 # decision logs
 decisions/
 COMMENTS.md
+.env.*
+!.env.example
+!.env.test.example

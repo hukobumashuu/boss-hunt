@@ -20,16 +20,32 @@ Express API backed by PostgreSQL and Drizzle, running on Bun.
 
 ## Environment
 
-| Variable         | Purpose                                |
-| ---------------- | -------------------------------------- |
-| `DATABASE_URL`   | PostgreSQL connection string           |
-| `ALLOWED_ORIGIN` | Browser origin permitted by CORS       |
-| `PORT`           | API port, default `4100`               |
-| `NODE_ENV`       | `development`, `test`, or `production` |
+| Variable          | Purpose                                                                     |
+| ----------------- | --------------------------------------------------------------------------- |
+| `DATABASE_URL`    | PostgreSQL connection string                                                |
+| `ALLOWED_ORIGIN`  | Browser origin permitted by CORS                                            |
+| `PORT`            | API port, default `4100`                                                    |
+| `NODE_ENV`        | `development`, `test`, or `production`                                      |
+| `ALLOW_REMOTE_DB` | `true` lets a non-production server use a remote database (default `false`) |
+
+`ALLOWED_ORIGIN` is normalized when the server starts: a trailing slash is removed, and anything that is not a plain `http(s)` origin (a path, query or credentials) is rejected with a clear message. The startup log prints the CORS origin and database in use.
 
 `bun test` aborts if `DATABASE_URL` points at a database whose name does not contain `test`, because the integration tests delete all rows. Copy `.env.test.example` to `.env.test` to run them locally.
 
 All `/api/*` routes require a bearer token. `GET /health` is public for Render health checks. The API trusts one proxy hop, which is required for correct per-client rate limiting behind Render.
+
+### Dev and production database commands
+
+Every database command prints its target (host and database name, never the password) before it does anything, and each one only runs against the kind of database its name promises:
+
+- `db:*` commands are **local only**. They refuse any host other than `localhost`, `127.0.0.1` or `::1`.
+- `db:prod:*` commands are **remote only**. They load `server/.env.neon` and nothing else, refuse a local database, and require you to type the database host before anything runs. A lazy `y` aborts.
+- `db:migrate` also runs on Render: a deploy (`NODE_ENV=production` or `RENDER=true`) may migrate a remote database without a prompt. Never export `NODE_ENV=production` on your own machine. `seed` and the token commands do not have this exception.
+- `bun run dev` refuses to start when `NODE_ENV` is not `production` and `DATABASE_URL` is remote, unless `ALLOW_REMOTE_DB=true`.
+
+`server/.env.neon` (ignored by git) must define `DATABASE_URL` and `ALLOWED_ORIGIN`. Bun loads only that file for `db:prod:*` commands, so `.env.local` and `.env.development` cannot leak into them. Put production values only there, never in `.env.local` or `.env.development`, which Bun loads automatically for every other command.
+
+Migrations run inside the same process as the guard (`src/db/migrate.ts`, using Drizzle's own migrator and the same `drizzle.__drizzle_migrations` history as `drizzle-kit`), so the database that was checked is the database that is migrated. Use `bun run db:generate` to create new migration files.
 
 ### Diagnosing a hang
 
@@ -47,4 +63,4 @@ Every request is cut off with a `503` after 10 seconds. The log only records pro
 
 ## Deployment
 
-`render.yaml` targets Render's free web-service plan. Its build command runs `bun install --frozen-lockfile` followed by `bun run db:migrate`; migration failures cancel the deployment. Seed bosses and generate tokens manually once after the Neon database is available.
+`render.yaml` targets Render's free web-service plan. Its build command runs `bun install --frozen-lockfile` followed by `bun run db:migrate`; migration failures cancel the deployment. Seed bosses and generate tokens once after the Neon database is available, with `bun run db:prod:seed` and `bun run db:prod:generate-tokens`.

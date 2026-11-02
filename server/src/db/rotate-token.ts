@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '../config/db';
 import { loggers } from './schema';
 import { env } from '../config/env';
+import { enforceTarget, parseCliArgs } from './target-guard';
 
 function generateToken(): string {
   return randomBytes(32).toString('hex');
@@ -13,11 +14,19 @@ function hashToken(token: string): string {
 }
 
 async function rotateToken() {
-  const name = process.argv[2];
+  const { production, positional } = parseCliArgs(process.argv.slice(2));
+  const name = positional[0];
   if (!name) {
-    console.error('Usage: bun src/db/rotate-token.ts "PersonName"');
+    console.error(
+      'Usage: bun run db:rotate-token "PersonName"\n' +
+        '       bun run db:prod:rotate-token "PersonName"   (production)',
+    );
     process.exit(1);
   }
+
+  enforceTarget(production ? 'production' : 'dev', {
+    action: `rotate token for ${name}`,
+  });
 
   const token = generateToken();
   const tokenHash = hashToken(token);

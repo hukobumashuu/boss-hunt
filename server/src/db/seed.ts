@@ -1,6 +1,7 @@
 import { db } from '../config/db';
 import { bosses } from './schema';
 import type { NewBoss } from './schema';
+import { enforceTarget, parseCliArgs } from './target-guard';
 
 const SEED_BOSSES: NewBoss[] = [
   { name: 'Faello', map: 'Lakeside', respawnIntervalHours: 4 },
@@ -11,6 +12,9 @@ const SEED_BOSSES: NewBoss[] = [
 ];
 
 async function seed() {
+  const { production } = parseCliArgs(process.argv.slice(2));
+  enforceTarget(production ? 'production' : 'dev', { action: 'seed bosses' });
+
   const inserted = await db
     .insert(bosses)
     .values(SEED_BOSSES)

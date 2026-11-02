@@ -3,6 +3,7 @@ import { db } from '../config/db';
 import { loggers } from './schema';
 import { KNOWN_LOGGERS } from '../shared/utils/constants';
 import { env } from '../config/env';
+import { enforceTarget, parseCliArgs } from './target-guard';
 
 function generateToken(): string {
   return randomBytes(32).toString('hex');
@@ -13,6 +14,12 @@ function hashToken(token: string): string {
 }
 
 async function generateTokens() {
+  const { production } = parseCliArgs(process.argv.slice(2));
+  enforceTarget(production ? 'production' : 'dev', {
+    action: 'generate logger tokens',
+  });
+  const rotateCommand = production ? 'db:prod:rotate-token' : 'db:rotate-token';
+
   for (const name of KNOWN_LOGGERS) {
     const token = generateToken();
     const tokenHash = hashToken(token);
@@ -26,7 +33,7 @@ async function generateTokens() {
     if (inserted.length === 0) {
       console.log(
         `\n${name} already exists - skipped. Run ` +
-          `\`bun run db:rotate-token "${name}"\` if you need a new ` +
+          `\`bun run ${rotateCommand} "${name}"\` if you need a new ` +
           `token for them.`,
       );
       continue;

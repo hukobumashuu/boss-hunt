@@ -18,13 +18,17 @@
     "db:down": "docker compose -f ../docker-compose.yaml down",
     "db:logs": "docker compose -f ../docker-compose.yaml logs -f postgres",
     "db:generate": "bun --bun drizzle-kit generate",
-    "db:migrate": "bun --bun drizzle-kit migrate",
+    "db:migrate": "bun src/db/migrate.ts --allow-deploy",
     "db:test:create": "docker compose -f ../docker-compose.yaml exec postgres createdb -U boss_tracker boss_tracker_test",
-    "db:test:migrate": "bun --env-file=.env.test --bun drizzle-kit migrate",
+    "db:test:migrate": "bun --env-file=.env.test src/db/migrate.ts",
     "db:seed": "bun src/db/seed.ts",
     "db:generate-tokens": "bun src/db/generate-tokens.ts",
     "db:rotate-token": "bun src/db/rotate-token.ts",
-    "db:studio": "bun --bun drizzle-kit studio"
+    "db:studio": "bun --env-file=.env.development src/db/preflight.ts dev && bun --env-file=.env.development --bun drizzle-kit studio",
+    "db:prod:migrate": "bun --env-file=.env.neon src/db/migrate.ts --production",
+    "db:prod:seed": "bun --env-file=.env.neon src/db/seed.ts --production",
+    "db:prod:generate-tokens": "bun --env-file=.env.neon src/db/generate-tokens.ts --production",
+    "db:prod:rotate-token": "bun --env-file=.env.neon src/db/rotate-token.ts --production"
   },
   "dependencies": {
     "cors": "2.8.6",

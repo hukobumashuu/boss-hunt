@@ -1,15 +1,6 @@
-import { z } from 'zod';
+import { parseEnv } from './env-schema';
 
-const envSchema = z.object({
-  NODE_ENV: z
-    .enum(['development', 'test', 'production'])
-    .default('development'),
-  PORT: z.coerce.number().int().positive().default(4100),
-  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
-  ALLOWED_ORIGIN: z.string().default('http://localhost:5173'),
-});
-
-const parsed = envSchema.safeParse(process.env);
+const parsed = parseEnv(process.env);
 
 if (!parsed.success) {
   console.error(

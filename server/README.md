@@ -17,6 +17,10 @@ Express API backed by PostgreSQL and Drizzle, running on Bun.
 | `bun run db:seed`                 | Add missing static bosses                                             |
 | `bun run db:generate-tokens`      | Create missing logger tokens                                          |
 | `bun run db:rotate-token "Guest"` | Replace one logger's token                                            |
+| `db:prod:migrate`                 | Apply migrations to the prod database from `.env.neon`                |
+| `db:prod:seed`                    | Apply pending migrations to the prod database                         |
+| `db:prod:generate-tokens`         | Create missing logger tokens in prod                                  |
+| `db:prod:rotate-token`            | Replace one logger's token in prod                                    |
 
 ## Environment
 

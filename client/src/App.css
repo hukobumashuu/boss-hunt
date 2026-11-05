@@ -157,6 +157,15 @@
   gap: 8px;
 }
 
+.row__waiting {
+  margin-top: 10px;
+  padding: 10px;
+  background: var(--status-opening-soon-bg);
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: var(--status-opening-soon);
+}
+
 .row__confirm-actions {
   margin-top: 8px;
   display: flex;

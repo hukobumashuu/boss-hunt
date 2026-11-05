@@ -5,6 +5,7 @@ import { getErrorMessage } from "../lib/errors";
 import { reuseOrCreateKillIntent } from "../lib/killIntent";
 import type { KillIntent } from "../lib/killIntent";
 import { useLogKill, useVoidKill } from "../lib/queries";
+import { describeKillProgress } from "../lib/syncState";
 import { getBossLetter } from "../lib/bossShorthand";
 import { formatTimeOfDay } from "../lib/time";
 
@@ -36,6 +37,11 @@ export function LogKillForm({ bosses }: { bosses: Boss[] }) {
   // The current tap, kept until it succeeds or is cancelled, so confirming a
   // warning or retrying a failure still logs the time of the original tap.
   const intentRef = useRef<KillIntent | null>(null);
+  const progress = describeKillProgress({
+    isPending: logKill.isPending,
+    isPaused: logKill.isPaused,
+    failureCount: logKill.failureCount,
+  });
 
   function handleChannelTap(channel: number, force: boolean) {
     if (!selectedBoss) return;
@@ -154,12 +160,8 @@ export function LogKillForm({ bosses }: { bosses: Boss[] }) {
         ))}
       </div>
 
-      {logKill.isPending && (
-        <p className="status-text status-text--compact">
-          {logKill.failureCount > 0
-            ? "The server is slow to respond. Retrying..."
-            : "Logging..."}
-        </p>
+      {progress.note && (
+        <p className="status-text status-text--compact">{progress.note}</p>
       )}
 
       {undoable && (

@@ -5,6 +5,7 @@ import { getErrorMessage } from "../lib/errors";
 import { reuseOrCreateKillIntent } from "../lib/killIntent";
 import type { KillIntent } from "../lib/killIntent";
 import { useLogKill } from "../lib/queries";
+import { describeKillProgress } from "../lib/syncState";
 import { formatCountdown, formatTimeOfDay } from "../lib/time";
 
 interface DuplicateInfo {
@@ -26,6 +27,12 @@ export function TrackerRow({ entry, now }: { entry: TrackerEntry; now: Date }) {
   // The current tap, kept until it succeeds or is cancelled, so confirming a
   // warning or retrying a failure still logs the time of the original tap.
   const intentRef = useRef<KillIntent | null>(null);
+
+  const progress = describeKillProgress({
+    isPending: logKill.isPending,
+    isPaused: logKill.isPaused,
+    failureCount: logKill.failureCount,
+  });
 
   const nextCheckLabel =
     entry.status === "open"
@@ -117,6 +124,11 @@ export function TrackerRow({ entry, now }: { entry: TrackerEntry; now: Date }) {
             </div>
           </div>
         )}
+        {progress.waiting && progress.note && (
+          <div className="row__waiting" role="status">
+            {progress.note}
+          </div>
+        )}
         {logError && (
           <div className="row__error" role="alert">
             <span>{logError}</span>
@@ -137,11 +149,7 @@ export function TrackerRow({ entry, now }: { entry: TrackerEntry; now: Date }) {
         onClick={() => handleLog(false)}
         disabled={logKill.isPending}
       >
-        {logKill.isPending
-          ? logKill.failureCount > 0
-            ? "Retrying…"
-            : "Logging…"
-          : "Log kill"}
+        {progress.buttonLabel}
       </button>
     </li>
   );

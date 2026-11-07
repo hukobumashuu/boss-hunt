@@ -10,9 +10,11 @@ import { useBosses, useLogMaintenanceReset, useTracker } from "../lib/queries";
 import { ApiError, fetchCoverage } from "../lib/api";
 import { clearToken } from "../lib/auth";
 import { formatCopyText } from "../lib/copyFormat";
+import { getServerOffset } from "../lib/serverClock";
 import type { CoverageEntry } from "../lib/types";
+import { projectTracker } from "../lib/windowState";
 
-const TICK_MS = 30_000;
+const TICK_MS = 1_000;
 const COPIED_MESSAGE_MS = 2000;
 
 export function Dashboard() {
@@ -42,11 +44,19 @@ export function Dashboard() {
     return () => clearInterval(id);
   }, []);
 
+  const serverNowMs = now.getTime() + getServerOffset();
+  const serverNow = useMemo(() => new Date(serverNowMs), [serverNowMs]);
+
+  const projected = useMemo(
+    () => (data ? projectTracker(data, serverNowMs) : undefined),
+    [data, serverNowMs],
+  );
+
   const visible = useMemo(() => {
-    const all = data ?? [];
+    const all = projected ?? [];
     if (selectedBossIds.size === 0) return all;
     return all.filter((entry) => selectedBossIds.has(entry.bossId));
-  }, [data, selectedBossIds]);
+  }, [projected, selectedBossIds]);
 
   const isStale = (e: (typeof visible)[number]) => e.isStale;
   const active = useMemo(() => visible.filter((e) => !isStale(e)), [visible]);
@@ -201,7 +211,7 @@ export function Dashboard() {
               <TrackerRow
                 key={`${entry.bossId}-${entry.channel}`}
                 entry={entry}
-                now={now}
+                now={serverNow}
               />
             ))}
           </ul>
@@ -222,7 +232,7 @@ export function Dashboard() {
                   <TrackerRow
                     key={`${entry.bossId}-${entry.channel}`}
                     entry={entry}
-                    now={now}
+                    now={serverNow}
                   />
                 ))}
               </ul>

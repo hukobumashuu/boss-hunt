@@ -1,5 +1,6 @@
 import { getToken } from "./auth";
 import { ApiError } from "./errors";
+import { recordClockSample } from "./serverClock";
 import { withTimeout } from "./withTimeout";
 import type {
   ApiErrorBody,
@@ -21,21 +22,34 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getToken();
 
   // Only network I/O runs under the deadline; parsing happens afterwards.
-  const { ok, status, text } = await withTimeout(
-    async (signal) => {
-      const res = await fetch(`${BASE_URL}${path}`, {
-        ...init,
-        signal,
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          ...init?.headers,
-        },
-      });
-      return { ok: res.ok, status: res.status, text: await res.text() };
-    },
-    { signal: init?.signal ?? undefined },
-  );
+  const { ok, status, text, dateHeader, sentAt, receivedAt } =
+    await withTimeout(
+      async (signal) => {
+        const sentAt = Date.now();
+        const res = await fetch(`${BASE_URL}${path}`, {
+          ...init,
+          signal,
+          cache: "no-store",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...init?.headers,
+          },
+        });
+        const receivedAt = Date.now();
+        return {
+          ok: res.ok,
+          status: res.status,
+          text: await res.text(),
+          dateHeader: res.headers.get("date"),
+          sentAt,
+          receivedAt,
+        };
+      },
+      { signal: init?.signal ?? undefined },
+    );
+
+  if (ok) recordClockSample({ dateHeader, sentAt, receivedAt });
 
   let body: { success: true; message: string; data: T } | ApiErrorBody<unknown>;
 

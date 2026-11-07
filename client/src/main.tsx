@@ -3,7 +3,10 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App } from "./App";
 import { retryDelayMs, shouldRetryQuery } from "./lib/retry";
+import { loadServerOffset } from "./lib/serverClock";
 import "./index.css";
+
+loadServerOffset();
 
 const queryClient = new QueryClient({
   defaultOptions: {

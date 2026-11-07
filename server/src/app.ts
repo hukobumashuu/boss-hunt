@@ -33,7 +33,7 @@ export function createApp(options: AppOptions = {}) {
   app.set('trust proxy', 1);
   app.use(requestLogger());
   app.use(requestTimeout(options.requestTimeoutMs));
-  app.use(cors({ origin: env.ALLOWED_ORIGIN }));
+  app.use(cors({ origin: env.ALLOWED_ORIGIN, exposedHeaders: ['Date'] }));
   app.use(express.json());
 
   app.get('/health', (_req, res) => {

@@ -154,6 +154,20 @@ integration('API integration', () => {
       expect(body.success).toBe(true);
     });
 
+    it('lets the browser read the server clock from the Date header', async () => {
+      const allowedOrigin = (
+        process.env.ALLOWED_ORIGIN ?? 'http://localhost:5173'
+      ).replace(/\/+$/, '');
+      const response = await fetch(`${baseUrl}/health`, {
+        headers: { Origin: allowedOrigin },
+      });
+
+      const exposed = response.headers.get('access-control-expose-headers');
+      const serverTime = Date.parse(response.headers.get('date') ?? '');
+      expect(exposed?.toLowerCase()).toContain('date');
+      expect(Math.abs(serverTime - Date.now())).toBeLessThan(5_000);
+    });
+
     it('serves /health/db without a token and reports database latency', async () => {
       const { status, body } = await call('GET', '/health/db', {
         token: null,
